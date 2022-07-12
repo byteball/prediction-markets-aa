@@ -1,16 +1,17 @@
 {
 	doc_url: "https://prophet.ooo/prediction-markets.json",
 	getters: `{
-		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => {
+		$lib_aa_const = "VXXU4XBKWD3XRKMI4JLGTQ5EUPDOC36A";
 
-			$coef = var['coef'] OTHERWISE 1;
+		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#2.$get_reserve(this_address, $yes_amount, $no_amount, $draw_amount);
 
-			$r = ceil($coef * sqrt($yes_amount * $yes_amount + $no_amount * $no_amount + $draw_amount * $draw_amount));
-			$r
-		};
+		$get_exchange_result = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#11.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);
+
+		$get_result_for_buying_by_type = ($type, $reserve_amount) => ($lib_aa_const||'')#10.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
+
 	}`,
 	init: `{
-		$lib_aa = "RKAJ5FAG6VFNET3GHTVMK6XUMG23VP6M" || '';
+		$lib_aa = $lib_aa_const || '';
 
 		// params
 		$oracle = params.oracle;
@@ -191,7 +192,7 @@
 
 						require(trigger.output[[asset=$reserve_asset]] > $network_fee, 'You sent no reserve');
 
-						$res = $lib_aa#11.$get_token_amount(this_address, $type, $reserve_amount);
+						$res = $lib_aa#10.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
 						if ($type == 'yes') {
 							$yes_amount = $res.amount;
@@ -207,17 +208,23 @@
 							$draw_amount = $res.amount;
 						}
 
+						if ($res.amount < $min_expected_amount) {
+							$error = "amount less than minimum";
+							response['error'] = $error;
+							return;
+						}
+
 					} else {
 						$yes_amount = trigger.data.yes_amount OTHERWISE -trigger.output[[asset=$yes_asset]];
 						$no_amount = trigger.data.no_amount OTHERWISE -trigger.output[[asset=$no_asset]];
 						$draw_amount = $allow_draw ? trigger.data.draw_amount OTHERWISE -trigger.output[[asset=$draw_asset]] : 0;
 
 						if (trigger.data.yes_amount AND (!is_integer(trigger.data.yes_amount) OR trigger.data.yes_amount <= 0))
-							bounce("invalid number of yes_amount");
+							bounce("invalid yes_amount");
 						if (trigger.data.no_amount AND (!is_integer(trigger.data.no_amount) OR trigger.data.no_amount <= 0))
-							bounce("invalid number of no_amount");
+							bounce("invalid no_amount");
 						if ($allow_draw AND trigger.data.draw_amount AND (!is_integer(trigger.data.draw_amount) OR trigger.data.draw_amount <= 0))
-							bounce("invalid number of draw_amount");
+							bounce("invalid draw_amount");
 
 						if (trigger.data.yes_amount AND trigger.output[[asset=$yes_asset]] > 0)
 							bounce("both yes_amount param and amount");
@@ -226,26 +233,16 @@
 						if ($allow_draw AND trigger.data.draw_amount AND trigger.output[[asset=$draw_asset]] > 0)
 							bounce("both draw_amount param and amount");
 
-						$res = $lib_aa#12.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);	
-					}
+						$res = $lib_aa#11.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);	
+						$payout = floor($res.gross_payout + $reserve_amount - $res.reserve_needed - $res.fee - $network_fee);
 
-					$payout = floor($res.payout + $reserve_amount - $res.reserve_needed - $res.fee - $network_fee);
-
-					if ($type) {
-						$amount = $type == 'yes' ? $yes_amount : ($type == 'no' ? $no_amount : $draw_amount);
-
-						if ($amount < $min_expected_amount) {
-							$error = "amount less than minimum";
+						if ($res.reserve_needed > 0 AND ($res.reserve_needed + $res.fee + $network_fee > $reserve_amount)) {
+							$error = "expected reserve amount: " || ($res.reserve_needed + $res.fee + $network_fee);
 							response['error'] = $error;
 							return;
 						}
 					}
 
-					if ($res.reserve_needed > 0 AND ($res.reserve_needed + $res.fee + $network_fee > $reserve_amount)) {
-						$error = "expected reserve amount: " || ($res.reserve_needed + $res.fee + $network_fee);
-						response['error'] = $error;
-						return;
-					}
 				}`,
 				messages: [
 					{
