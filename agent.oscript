@@ -82,7 +82,6 @@
 				if: `{!$ready AND trigger.data.define}`,
 				init: `{
 					$define_type = $yes_asset ? ($no_asset ? "draw_asset" : "no_asset") : "yes_asset";
-					$define_asset_forwarder = 'E4BAASPOCW6WHXSUOY2XEKXKA42RRD5I';
 					require(($define_type == 'draw_asset' AND $allow_draw) OR $define_type == 'no_asset' OR $define_type == 'yes_asset', "unknown define type");
 					require(!var[$define_type], "asset already defined");
 				}`,
@@ -101,54 +100,20 @@
 						}
 					},
 					{ // define the second asset through a forwarder
-						if: `{trigger.data.factory AND !$yes_asset}`,
+						if: `{trigger.data.factory}`,
 						app: 'data',
 						payload: {
 							factory: "{trigger.data.factory}",
+							type: "{$define_type}",
 						}
 					},
 					{
-						if: `{trigger.data.factory AND !$yes_asset}`,
+						if: `{trigger.data.factory}`,
 						app: 'payment',
 						payload: {
 							asset: 'base',
 							outputs: [
-								{address: "{$define_asset_forwarder}", amount: 4000}
-							]
-						}
-					},
-					{ // call back to factory to record our newly defined assets
-						if: `{trigger.data.factory AND $yes_asset AND !$no_asset}`,
-						app: 'data',
-						payload: {
-							yes_asset: "{$yes_asset}",
-							allow_draw: "{params.allow_draw}"
-						}
-					},
-					{
-						if: `{trigger.data.factory AND $yes_asset AND !$no_asset}`,
-						app: 'payment',
-						payload: {
-							asset: 'base',
-							outputs: [
-								{address: '{trigger.data.factory}', amount: 4000}
-							]
-						}
-					},
-					{
-						if: `{trigger.data.factory AND $yes_asset AND $no_asset AND !$draw_asset AND $allow_draw}`,
-						app: 'data',
-						payload: {
-							no_asset: "{$no_asset}",
-						}
-					},
-						{
-						if: `{trigger.data.factory AND $yes_asset AND $no_asset AND !$draw_asset AND $allow_draw}`,
-						app: 'payment',
-						payload: {
-							asset: 'base',
-							outputs: [
-								{address: '{trigger.data.factory}', amount: 4000},
+								{address: "{trigger.data.factory}", amount: 4000}
 							]
 						}
 					},
