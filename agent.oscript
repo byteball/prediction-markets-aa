@@ -464,11 +464,11 @@
 				init: `{
 					require(timestamp > $end_of_trading_period, "trading period has not yet ended");
 					
-					$current_datafeed_value = data_feed[[oracles=$oracle, feed_name=$feed_name, ifnone='none']];
+					$current_datafeed_value = data_feed[[oracles=$oracle, feed_name=$feed_name, ifnone=false]];
 
-					require($current_datafeed_value != 'none', "data_feed is empty");
+					require(exists($current_datafeed_value), "data_feed not found");
 					require(timestamp > $end_of_trading_period, "trading period has not ended yet");
-					require(timestamp < $end_of_waiting_period, "it's late, the waiting period has passed");
+					require(timestamp < $end_of_waiting_period, "too late, the waiting period is over");
 
 					if ($comparison == '>')
 							$datafeed_comparison = $current_datafeed_value > $datafeed_value;
