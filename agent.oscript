@@ -26,7 +26,7 @@
 		$reserve_asset = params.reserve_asset OTHERWISE 'base';
 		require(asset[$reserve_asset].exists, "no such asset: " || $reserve_asset);
 
-		$allow_draw = params.allow_draw OTHERWISE false;
+		$allow_draw = params.allow_draw;
 
 		$datafeed_draw_value = params.datafeed_draw_value OTHERWISE 'none';
 		$datafeed_value = params.datafeed_value;
@@ -518,13 +518,12 @@
 
 					$winner_amount = $result == 'yes' ? $yes_amount : $result == 'no' ? $no_amount : $draw_amount;
 
-					$winner_supply = $result == 'yes' ? var['supply_yes'] : $result == 'no' ? var['supply_no'] : var['supply_draw'];
+					$winner_supply = var['supply_' || $result];
 
-					require($winner_supply > 0 AND $winner_amount > 0, "winner supply < 0 or sending not a winner token");
+					require($winner_supply > 0, "BUG winner supply = " || $winner_supply);
+					require($winner_amount > 0, "please send only the winner token");
 
-					$price_winner_by_reserve = $reserve / $winner_supply;
-
-					$payout = floor($winner_amount * $price_winner_by_reserve);
+					$payout = floor($winner_amount / $winner_supply * $reserve);
 				}`,
 				messages: [
 						{
