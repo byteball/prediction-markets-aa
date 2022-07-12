@@ -4,10 +4,10 @@
 	getters: `{
 		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => {
 
-		$coef = var['coef'] OTHERWISE 1;
+			$coef = var['coef'] OTHERWISE 1;
 
-		$r = ceil($coef * sqrt($yes_amount * $yes_amount + $no_amount * $no_amount + $draw_amount * $draw_amount));
-		$r
+			$r = ceil($coef * sqrt($yes_amount * $yes_amount + $no_amount * $no_amount + $draw_amount * $draw_amount));
+			$r
 		};
 	}`,
 	init: `{
@@ -327,7 +327,7 @@
 					},
 				]
 			},
-				{ // add liquidity
+			{ // add liquidity
 				if: `{$ready AND trigger.data.add_liquidity AND $reserve_amount > $network_fee}`,
 				init: `{
 					$fee = $reserve_amount * $issue_fee;
@@ -471,17 +471,17 @@
 					require(timestamp < $end_of_waiting_period, "too late, the waiting period is over");
 
 					if ($comparison == '>')
-							$datafeed_comparison = $current_datafeed_value > $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value > $datafeed_value;
 					else if ($comparison == '<')
-							$datafeed_comparison = $current_datafeed_value < $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value < $datafeed_value;
 					else if ($comparison == '!=')
-							$datafeed_comparison = $current_datafeed_value != $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value != $datafeed_value;
 					else if ($comparison == '==')
-							$datafeed_comparison = $current_datafeed_value == $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value == $datafeed_value;
 					else if ($comparison == '>=')
-							$datafeed_comparison = $current_datafeed_value >= $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value >= $datafeed_value;
 					else if ($comparison == '<=')
-							$datafeed_comparison = $current_datafeed_value <= $datafeed_value;
+						$datafeed_comparison = $current_datafeed_value <= $datafeed_value;
 					else
 						bounce('Comparison operator not found');
 					
