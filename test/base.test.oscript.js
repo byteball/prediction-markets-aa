@@ -33,7 +33,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.waiting_period_length = 3 * 24 * 3600;
 		this.current_timestamp = Math.floor(Date.now() / 1000);
-		this.end_of_trading_period = this.current_timestamp + 30 * 24 * 3600;
+		this.date_of_the_event = this.current_timestamp + 30 * 24 * 3600;
 
 		this.coef = 1;
 
@@ -58,7 +58,11 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.allow_draw = false;
 		this.arb_profit_tax = 0.9;
 
-		this.network_fee = (this.reserve_asset == 'base' ? 10000 : 0);
+		this.network_fee = (this.reserve_asset === 'base' ? 10000 : 0);
+
+		this.check_reserve = () => {
+			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.equal(this.reserve);
+		}
 
 		this.buy = (amount_yes, amount_no, amount_draw, readOnly) => {
 			const BN = (num) => new Decimal(num);
@@ -119,7 +123,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.get_result_for_buying_by_type = (type, reserve_amount, readOnly = false) => {
 
 			const gross_reserve_delta = reserve_amount - this.network_fee;
-			const fee = Math.ceil(gross_reserve_delta * this.issue_fee);
+			const fee = ceil(gross_reserve_delta * this.issue_fee);
 
 			const old_reserve = this.reserve;
 			const new_reserve = old_reserve + gross_reserve_delta;
@@ -249,7 +253,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
 
-				const next_coef = this.coef * ((new_reserve + fee) / new_reserve);
+				const next_coef = this.coef * new_reserve / (new_reserve - fee);
 
 				this.coef = next_coef;
 			}
@@ -272,7 +276,7 @@ describe('Check prediction AA: 1 (base)', function () {
 				comparison: "==",
 				feed_name: this.feed_name,
 				datafeed_value: this.datafeed_value,
-				end_of_trading_period: this.end_of_trading_period,
+				date_of_the_event: this.date_of_the_event,
 				waiting_period_length: this.waiting_period_length,
 				reserve_asset: this.reserve_asset,
 				arb_profit_tax: this.arb_profit_tax,
@@ -484,6 +488,8 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.alice_yes_amount += yes_amount;
 		this.alice_no_amount += no_amount;
+
+		this.check_reserve();
 	});
 
 	it('Alice issue tokens (not enough reserve)', async () => {
@@ -522,8 +528,6 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: amount
 			},
 		]);
-
-		// expect(response.response.error).to.equal(`expected reserve amount: ${Math.abs(res.reserve_needed + res.fee + 1e4)}`);
 	});
 
 	it('Alice redeem yes tokens', async () => {
@@ -559,6 +563,8 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: res.payout - res.fee
 			},
 		]);
+
+		this.check_reserve();
 	});
 
 	it('Bob issue tokens', async () => {
@@ -613,6 +619,8 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.bob_yes_amount = yes_amount;
 		this.bob_no_amount = no_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
@@ -654,6 +662,8 @@ describe('Check prediction AA: 1 (base)', function () {
 		]);
 
 		this.bob_no_amount += res.amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob add liquidity', async () => {
@@ -705,10 +715,12 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.bob_no_amount += no_amount;
 		this.bob_yes_amount += yes_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens after the period expires', async () => {
-		const { error } = await this.network.timetravel({ shift: (this.end_of_trading_period - this.current_timestamp + 100) * 1000 });
+		const { error } = await this.network.timetravel({ shift: (this.date_of_the_event - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
 
 		const yes_amount = 250;

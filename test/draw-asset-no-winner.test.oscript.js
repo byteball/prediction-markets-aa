@@ -33,7 +33,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 		this.waiting_period_length = 3 * 24 * 3600;
 		this.current_timestamp = Math.floor(Date.now() / 1000);
-		this.end_of_trading_period = this.current_timestamp + 30 * 24 * 3600;
+		this.date_of_the_event = this.current_timestamp + 30 * 24 * 3600;
 
 		this.coef = 1;
 
@@ -269,7 +269,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 				feed_name: this.feed_name,
 				allow_draw: this.allow_draw,
 				datafeed_value: this.datafeed_value,
-				end_of_trading_period: this.end_of_trading_period,
+				date_of_the_event: this.date_of_the_event,
 				waiting_period_length: this.waiting_period_length,
 				reserve_asset: this.reserve_asset,
 				arb_profit_tax: this.arb_profit_tax
@@ -530,7 +530,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 	});
 
 	it('Bob issues tokens after the period expires', async () => {
-		const { error } = await this.network.timetravel({ shift: (this.end_of_trading_period - this.current_timestamp + 100) * 1000 });
+		const { error } = await this.network.timetravel({ shift: (this.date_of_the_event - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
 
 		const yes_amount = 250;
