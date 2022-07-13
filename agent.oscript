@@ -33,8 +33,8 @@
 
 		require(exists($datafeed_value), "datafeed_value does not exist");
 
-		$date_of_the_event = params.date_of_the_event OTHERWISE 0;
-		require(is_integer($date_of_the_event) AND $date_of_the_event > 0, "date_of_the_event must be integer");
+		$event_date = params.event_date OTHERWISE 0;
+		require(is_integer($event_date) AND $event_date > 0, "event_date must be integer");
 
 		$waiting_period_length = params.waiting_period_length OTHERWISE 5 * 24 * 3600;
 		require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "waiting period must be integer");
@@ -57,7 +57,7 @@
 		$no_asset = var['no_asset'];
 		$draw_asset = var['draw_asset'];
 
-		$end_of_waiting_period = $date_of_the_event + $waiting_period_length;
+		$end_of_waiting_period = $event_date + $waiting_period_length;
 
 		$network_fee = ($reserve_asset == 'base') ? 10000 : 0;
 		
@@ -144,7 +144,7 @@
 						bounce("invalid min_expected_amount");
 					}
 
-					if (!(timestamp <= $date_of_the_event - $quiet_period OR timestamp >= $end_of_waiting_period)){
+					if (!(timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period)){
 						$error = "the trading period is closed";
 						response['error'] = $error;
 						return;
@@ -298,7 +298,7 @@
 					$fee = ceil($gross_reserve_delta * $issue_fee);
 					$reserve_amount_without_fee = $reserve_amount - $fee - $network_fee;
 					
-					if ((timestamp <= $date_of_the_event - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
+					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
 
 						if ($supply_yes + $supply_no + $supply_draw == 0) {
 							$yes_amount_ratio = trigger.data.yes_amount_ratio OTHERWISE 0;
@@ -427,12 +427,12 @@
 			{ // commit result
 				if: `{$ready AND trigger.data.commit AND !$result}`,
 				init: `{
-					require(timestamp > $date_of_the_event, "trading period has not yet ended");
+					require(timestamp > $event_date, "trading period has not yet ended");
 					
 					$current_datafeed_value = data_feed[[oracles=$oracle, feed_name=$feed_name, ifnone=false]];
 
 					require(exists($current_datafeed_value), "data_feed not found");
-					require(timestamp > $date_of_the_event, "trading period has not ended yet");
+					require(timestamp > $event_date, "trading period has not ended yet");
 					require(timestamp < $end_of_waiting_period, "too late, the waiting period is over");
 
 					if ($comparison == '>')

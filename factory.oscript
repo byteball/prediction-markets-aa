@@ -1,7 +1,7 @@
 {
 	doc_url: "https://obyte.org/prediction-factory.json",
 	init: `{
-		$prediction_base_aa = 'KY2KWWNJXDVWYK5J7RTBUD5BDPIRAXWA';
+		$prediction_base_aa = 'JS77M4U2VOVY2IVXARR4FM4YBHWAUNYW';
 	}`,
 	messages: {
 		cases: [
@@ -63,8 +63,8 @@
 					$datafeed_value = trigger.data.datafeed_value;
 					require(exists($datafeed_value), "datafeed_value does not exist");		
 
-					$date_of_the_event = trigger.data.date_of_the_event OTHERWISE 0;
-					require(is_integer($date_of_the_event) AND $date_of_the_event > timestamp, "date_of_the_event must be integer");
+					$event_date = trigger.data.event_date OTHERWISE 0;
+					require(is_integer($event_date) AND $event_date > timestamp, "event_date must be integer");
 
 					$waiting_period_length = trigger.data.waiting_period_length OTHERWISE 5 * 24 * 3600;
 					require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "trading period must be longer than a day");
@@ -88,7 +88,7 @@
 						reserve_asset: $reserve_asset,
 						allow_draw: $allow_draw,
 						datafeed_value: $datafeed_value,
-						date_of_the_event: $date_of_the_event,
+						event_date: $event_date,
 						waiting_period_length: $waiting_period_length,
 						arb_profit_tax: $arb_profit_tax,
 						issue_fee: $issue_fee,
