@@ -219,7 +219,8 @@ describe('Check prediction AA: 1 (base)', function () {
 		}
 
 		this.add_liquidity = (reserve_amount, data = {}, readOnly = false) => {
-			const fee = reserve_amount * this.issue_fee;
+			const gross_reserve_delta = reserve_amount - this.network_fee; // gross, because it includes the fee and tax
+			const fee = ceil(gross_reserve_delta * this.issue_fee);
 
 			const reserve_amount_without_fee = reserve_amount - fee - this.network_fee;
 			const { yes_amount_ratio = 0, no_amount_ratio = 0 } = data;
@@ -234,6 +235,7 @@ describe('Check prediction AA: 1 (base)', function () {
 				yes_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(yes_amount_ratio));
 				no_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(no_amount_ratio));
 				draw_amount = this.allow_draw ? Math.floor(reserve_amount_without_fee * Math.sqrt(draw_amount_ratio)) : 0;
+
 			} else {
 				const ratio = (reserve_amount_without_fee + this.reserve) / this.reserve;
 
@@ -243,7 +245,7 @@ describe('Check prediction AA: 1 (base)', function () {
 			}
 
 			if (!readOnly) {
-				this.reserve += reserve_amount;
+				
 				this.supply_yes += yes_amount;
 				this.supply_no += no_amount;
 
@@ -252,6 +254,8 @@ describe('Check prediction AA: 1 (base)', function () {
 				}
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+
+				this.reserve = new_reserve;
 
 				const next_coef = this.coef * new_reserve / (new_reserve - fee);
 
@@ -715,8 +719,6 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.bob_no_amount += no_amount;
 		this.bob_yes_amount += yes_amount;
-
-		this.check_reserve();
 	});
 
 	it('Bob issues tokens after the period expires', async () => {

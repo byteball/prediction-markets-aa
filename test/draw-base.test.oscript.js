@@ -215,7 +215,8 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 		}
 
 		this.add_liquidity = (reserve_amount, data = {}, readOnly = false) => {
-			const fee = reserve_amount * this.issue_fee;
+			const gross_reserve_delta = reserve_amount - this.network_fee; // gross, because it includes the fee and tax
+			const fee = ceil(gross_reserve_delta * this.issue_fee);
 
 			const reserve_amount_without_fee = reserve_amount - fee - this.network_fee;
 			const { yes_amount_ratio = 0, no_amount_ratio = 0 } = data;
@@ -240,7 +241,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 			}
 
 			if (!readOnly) {
-				this.reserve += reserve_amount;
+				
 				this.supply_yes += yes_amount;
 				this.supply_no += no_amount;
 
@@ -250,7 +251,9 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
 
-				const next_coef = this.coef * ((new_reserve + fee) / new_reserve);
+				this.reserve = new_reserve;
+
+				const next_coef = this.coef * new_reserve / (new_reserve - fee);
 
 				this.coef = next_coef;
 			}
@@ -351,8 +354,6 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
 		expect(Number(vars1.coef).toFixed(9)).to.be.equal(Number(this.coef).toFixed(9));
-
-		this.coef = vars1.coef;
 
 		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
 

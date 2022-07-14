@@ -379,8 +379,6 @@
 						if: "{!$hasError}",
 						app: 'state',
 						state: `{
-							var['reserve'] += $reserve_amount;
-
 							var['supply_yes'] += $yes_amount;
 							response['supply_yes'] = var['supply_yes'] OTHERWISE 0;
 
@@ -398,6 +396,8 @@
 
 							$new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
 
+							var['reserve'] = $new_reserve;
+							
 							$next_coef = (var['coef'] OTHERWISE 1) * $new_reserve / ($new_reserve - $fee);
 
 							var['coef'] = $next_coef;
