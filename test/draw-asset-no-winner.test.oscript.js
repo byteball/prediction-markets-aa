@@ -246,10 +246,12 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 				}
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				
+				const rounding_fee = this.reserve + gross_reserve_delta - new_reserve - fee;
 
 				this.reserve = new_reserve;
 
-				const next_coef = this.coef * new_reserve / (new_reserve - fee);
+				const next_coef = this.coef * new_reserve / (new_reserve - fee - rounding_fee);
 
 				this.coef = next_coef;
 			}

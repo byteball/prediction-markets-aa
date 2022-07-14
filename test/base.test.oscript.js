@@ -60,10 +60,6 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.network_fee = (this.reserve_asset === 'base' ? 10000 : 0);
 
-		this.check_reserve = () => {
-			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.equal(this.reserve);
-		}
-
 		this.buy = (amount_yes, amount_no, amount_draw, readOnly) => {
 			const BN = (num) => new Decimal(num);
 			const new_reserve = ceil(this.coef * sqrt((this.supply_yes + amount_yes) ** 2 + (this.supply_no + amount_no) ** 2 + (this.supply_draw + amount_draw) ** 2));
@@ -254,10 +250,12 @@ describe('Check prediction AA: 1 (base)', function () {
 				}
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				
+				const rounding_fee = this.reserve + gross_reserve_delta - new_reserve - fee;
 
 				this.reserve = new_reserve;
 
-				const next_coef = this.coef * new_reserve / (new_reserve - fee);
+				const next_coef = this.coef * new_reserve / (new_reserve - fee - rounding_fee);
 
 				this.coef = next_coef;
 			}
@@ -492,8 +490,6 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.alice_yes_amount += yes_amount;
 		this.alice_no_amount += no_amount;
-
-		this.check_reserve();
 	});
 
 	it('Alice issue tokens (not enough reserve)', async () => {
@@ -567,8 +563,6 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: res.payout - res.fee
 			},
 		]);
-
-		this.check_reserve();
 	});
 
 	it('Bob issue tokens', async () => {
@@ -621,10 +615,8 @@ describe('Check prediction AA: 1 (base)', function () {
 			},
 		]);
 
-		this.bob_yes_amount = yes_amount;
-		this.bob_no_amount = no_amount;
-
-		this.check_reserve();
+		this.bob_yes_amount += yes_amount;
+		this.bob_no_amount += no_amount;
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
@@ -666,8 +658,6 @@ describe('Check prediction AA: 1 (base)', function () {
 		]);
 
 		this.bob_no_amount += res.amount;
-
-		this.check_reserve();
 	});
 
 	it('Bob add liquidity', async () => {
@@ -900,9 +890,49 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
 		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+
+		this.reserve -= expect_payout;
 	});
 
-	it('Alice send lose token', async () => {
+	it('Bob claim profit', async () => {
+		const { unit, error } = await this.bob.sendMulti({
+			asset: this.yes_asset,
+			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
+			asset_outputs: [{ address: this.prediction_address, amount: this.bob_yes_amount }],
+			messages: [{
+				app: 'data',
+				payload: {
+					claim_profit: 1
+				}
+			}]
+		});
+
+		const price = (this.reserve / this.supply_yes);
+		const expect_payout = Math.floor(price * this.bob_yes_amount);
+
+		this.supply_yes -= this.bob_yes_amount;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+		expect(response.response.responseVars['profit']).to.be.equal(expect_payout);
+		expect(response.bounced).to.be.false;
+
+		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit });
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				amount: expect_payout
+			},
+		]);
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
+		expect(vars.supply_yes).to.be.equal(0);
+		expect(vars.reserve).to.be.equal(0);
+	});
+
+	it('Alice send lose token (and all profits have been paid)', async () => {
 		const { unit } = await this.alice.sendMulti({
 			asset: this.no_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
@@ -917,7 +947,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("please send only the winner token")
+		expect(response.response.error).to.be.equal("BUG winner supply = 0")
 	});
 
 	after(async () => {

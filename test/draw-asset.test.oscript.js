@@ -252,10 +252,12 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 				}
 
 				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				
+				const rounding_fee = this.reserve + gross_reserve_delta - new_reserve - fee;
 
 				this.reserve = new_reserve;
 
-				const next_coef = this.coef * new_reserve / (new_reserve - fee);
+				const next_coef = this.coef * new_reserve / (new_reserve - fee - rounding_fee);
 
 				this.coef = next_coef;
 			}
@@ -631,9 +633,9 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 			},
 		]);
 
-		this.bob_yes_amount = yes_amount;
-		this.bob_no_amount = no_amount;
-		this.bob_draw_amount = draw_amount;
+		this.bob_yes_amount += yes_amount;
+		this.bob_no_amount += no_amount;
+		this.bob_draw_amount += draw_amount;
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
@@ -825,10 +827,61 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		expect(unit).to.be.validUnit;
 
 		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
+
 		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+
+		this.reserve = this.reserve - expect_payout;
 	});
 
-	it('Alice send lose token', async () => {
+	it('Bob claim profit', async () => {
+		const { unit, error } = await this.bob.sendMulti({
+			asset: this.yes_asset,
+			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
+			asset_outputs: [{ address: this.prediction_address, amount: this.bob_yes_amount }],
+			messages: [{
+				app: 'data',
+				payload: {
+					claim_profit: 1
+				}
+			}]
+		});
+
+		const price = (this.reserve / this.supply_yes);
+		const expect_payout = Math.floor(price * this.bob_yes_amount);
+
+		this.supply_yes -= this.bob_yes_amount;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
+
+		expect(response.response.responseVars['profit']).to.be.equal(expect_payout);
+		expect(response.bounced).to.be.false;
+
+		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit });
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				amount: expect_payout,
+				asset: this.reserve_asset
+			},
+		]);
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
+
+		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+
+		this.reserve = this.reserve - expect_payout;
+
+
+		const balance = await this.bob.getBalanceOf(this.prediction_address);
+
+		expect(balance[this.reserve_asset].stable).to.be.equal(0);
+		expect(this.reserve).to.be.equal(0);
+	});
+
+	it('Alice send lose token (and all profits have been paid)', async () => {
 		const { unit } = await this.alice.sendMulti({
 			asset: this.no_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
@@ -843,7 +896,7 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("please send only the winner token")
+		expect(response.response.error).to.be.equal("BUG winner supply = 0")
 	});
 
 	after(async () => {
