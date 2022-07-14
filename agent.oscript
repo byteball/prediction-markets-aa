@@ -394,16 +394,17 @@
 							$new_supply_no = var['supply_no'] OTHERWISE 0;
 							$new_supply_draw = var['supply_draw'] OTHERWISE 0;
 
-							$new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
+							$target_new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
 
-							$rounding_fee = var['reserve'] + $gross_reserve_delta - $new_reserve - $fee;
+							$new_reserve = var['reserve'] + $gross_reserve_delta;
+
+							$rounding_fee = var['reserve'] + $gross_reserve_delta - $target_new_reserve - $fee;
 							require($rounding_fee >= 0, 'BUG: rounding_fee < 0');
-
-							var['reserve'] = $new_reserve;
 
 							$next_coef = (var['coef'] OTHERWISE 1) * $new_reserve / ($new_reserve - $fee - $rounding_fee);
 
 							var['coef'] = $next_coef;
+							var['reserve'] += $gross_reserve_delta;
 
 							// for stats
 							response['yes_amount'] = $yes_amount OTHERWISE 0;

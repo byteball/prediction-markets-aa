@@ -60,6 +60,10 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 
 		this.network_fee = (this.reserve_asset == 'base' ? 10000 : 0);
 
+		this.check_reserve = () => {
+			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.oneOf([this.reserve, this.reserve + 1]);
+		}
+
 		this.buy = (amount_yes, amount_no, amount_draw, readOnly) => {
 			const BN = (num) => new Decimal(num);
 			const new_reserve = ceil(this.coef * sqrt((this.supply_yes + amount_yes) ** 2 + (this.supply_no + amount_no) ** 2 + (this.supply_draw + amount_draw) ** 2));
@@ -251,9 +255,10 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 					this.supply_draw += draw_amount;
 				}
 
-				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				const target_new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				const new_reserve = this.reserve + gross_reserve_delta;
 				
-				const rounding_fee = this.reserve + gross_reserve_delta - new_reserve - fee;
+				const rounding_fee = this.reserve + gross_reserve_delta - target_new_reserve - fee;
 
 				this.reserve = new_reserve;
 
@@ -386,6 +391,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		this.bob_no_amount += no_amount;
 		this.bob_yes_amount += yes_amount;
 		this.bob_draw_amount += draw_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens by type (yes)', async () => {
@@ -430,6 +437,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		]);
 
 		this.bob_yes_amount += res.amount;
+
+		this.check_reserve();
 	});
 
 	it('Alice issue tokens', async () => {
@@ -498,6 +507,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		this.alice_yes_amount += yes_amount;
 		this.alice_no_amount += no_amount;
 		this.alice_draw_amount += draw_amount;
+
+		this.check_reserve();
 	});
 
 	it('Alice issue tokens (not enough reserve)', async () => {
@@ -570,6 +581,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 				amount: res.payout - res.fee
 			},
 		]);
+
+		this.check_reserve();
 	});
 
 	it('Bob issue tokens', async () => {
@@ -636,6 +649,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		this.bob_yes_amount += yes_amount;
 		this.bob_no_amount += no_amount;
 		this.bob_draw_amount += draw_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
@@ -679,6 +694,8 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		]);
 
 		this.bob_no_amount += res.amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens after the period expires', async () => {
