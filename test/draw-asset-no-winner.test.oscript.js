@@ -54,7 +54,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 		this.arb_profit_tax = 0.8;
 
 		this.network_fee = (this.reserve_asset == 'base' ? 10000 : 0);
-		
+
 		this.check_reserve = () => {
 			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.oneOf([this.reserve, this.reserve + 1]);
 		}
@@ -241,7 +241,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 			}
 
 			if (!readOnly) {
-				
+
 				this.supply_yes += yes_amount;
 				this.supply_no += no_amount;
 
@@ -251,7 +251,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 				const target_new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
 				const new_reserve = this.reserve + gross_reserve_delta;
-				
+
 				const rounding_fee = this.reserve + gross_reserve_delta - target_new_reserve - fee;
 
 				this.reserve = new_reserve;
