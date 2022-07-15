@@ -33,7 +33,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.waiting_period_length = 3 * 24 * 3600;
 		this.current_timestamp = Math.floor(Date.now() / 1000);
-		this.end_of_trading_period = this.current_timestamp + 30 * 24 * 3600;
+		this.event_date = this.current_timestamp + 30 * 24 * 3600;
 
 		this.coef = 1;
 
@@ -58,7 +58,11 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.allow_draw = false;
 		this.arb_profit_tax = 0.9;
 
-		this.network_fee = (this.reserve_asset == 'base' ? 10000 : 0);
+		this.network_fee = (this.reserve_asset === 'base' ? 10000 : 0);
+
+		this.check_reserve = () => {
+			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.oneOf([this.reserve, this.reserve + 1]);
+		}
 
 		this.buy = (amount_yes, amount_no, amount_draw, readOnly) => {
 			const BN = (num) => new Decimal(num);
@@ -116,17 +120,20 @@ describe('Check prediction AA: 1 (base)', function () {
 			}
 		}
 
-		this.get_amount_by_type = (type, reserve_amount, readOnly = false) => {
-			const fee = ceil(reserve_amount - this.network_fee - ((reserve_amount - this.network_fee) / (1 + this.issue_fee)));
+		this.get_result_for_buying_by_type = (type, reserve_amount, readOnly = false) => {
 
-			const reserve = this.reserve + reserve_amount - fee - this.network_fee;
-			const ratio = reserve ** 2 / this.coef ** 2;
+			const gross_reserve_delta = reserve_amount - this.network_fee;
+			const fee = ceil(gross_reserve_delta * this.issue_fee);
+
+			const old_reserve = this.reserve;
+			const new_reserve = old_reserve + gross_reserve_delta;
+			const reserve_without_fee = new_reserve - fee;
+
+			const ratio = (reserve_without_fee * reserve_without_fee) / (this.coef * this.coef);
 
 			const supply_yes_squared = this.supply_yes ** 2;
 			const supply_no_squared = this.supply_no ** 2;
 			const supply_draw_squared = this.supply_draw ** 2;
-
-			let prepare_calc;
 
 			if (type == 'yes') {
 				prepare_calc = ratio - supply_no_squared - supply_draw_squared;
@@ -138,57 +145,55 @@ describe('Check prediction AA: 1 (base)', function () {
 
 			const supply = type == 'yes' ? this.supply_yes : type == 'no' ? this.supply_no : this.supply_draw;
 			const amount = floor(sqrt(prepare_calc) - supply);
-
-			let token_amount;
-
-			if ((this.supply_yes + this.supply_no + this.supply_draw) === 0) {
-				token_amount = amount;
-			};
-
-			const old_den = sqrt(supply_yes_squared + supply_no_squared + supply_draw_squared);
-
-			const old_price = this.coef * (supply / old_den);
 			const new_supply = supply + amount;
-
-			const new_supply_squared = new_supply ** 2;
+			const new_supply_squared = new_supply * new_supply;
 
 			const new_den = sqrt((type == 'yes' ? new_supply_squared : supply_yes_squared) + (type == 'no' ? new_supply_squared : supply_no_squared) + (type == 'draw' ? new_supply_squared : supply_draw_squared));
-			const new_price = this.coef * (new_supply / new_den);
-			const arb_profit_tax_amount = ((abs(old_price - new_price) * amount) / 2) * this.arb_profit_tax;
 
-			const fee_with_arb_profit_tax = ceil(reserve_amount - this.network_fee - ((reserve_amount - this.network_fee) / (1 + this.issue_fee))) + arb_profit_tax_amount;
+			let token_amount;
+			let fee_with_arb_profit_tax;
+			let arb_profit_tax_amount = 0;
 
-			const reserve_without_tax_and_fee = this.reserve + reserve_amount - fee_with_arb_profit_tax - this.network_fee;
-			const new_ratio = (reserve_without_tax_and_fee ** 2) / (this.coef ** 2);
+			if (this.reserve !== 0) {
+				const old_den = sqrt(supply_yes_squared + supply_no_squared + supply_draw_squared);
+				const old_price = this.coef * (supply / old_den);
 
-			let prepare_calc_2;
+				const new_price = this.coef * (new_supply / new_den);
+				arb_profit_tax_amount = ((abs(old_price - new_price) * amount) / 2) * this.arb_profit_tax;
 
-			if (type == 'yes') {
-				prepare_calc_2 = new_ratio - supply_no_squared - supply_draw_squared;
-			} else if (type == 'no') {
-				prepare_calc_2 = new_ratio - supply_yes_squared - supply_draw_squared;
-			} else {
-				prepare_calc_2 = new_ratio - supply_yes_squared - supply_no_squared;
-			}
+				fee_with_arb_profit_tax = fee + arb_profit_tax_amount;
 
-			if (!token_amount) {
+				const reserve_without_tax_and_fee = new_reserve - fee_with_arb_profit_tax;
+				const new_ratio = (reserve_without_tax_and_fee * reserve_without_tax_and_fee) / (this.coef * this.coef);
+
+				let prepare_calc_2;
+
+				if (type == 'yes') {
+					prepare_calc_2 = new_ratio - supply_no_squared - supply_draw_squared;
+				} else if (type == 'no') {
+					prepare_calc_2 = new_ratio - supply_yes_squared - supply_draw_squared;
+				} else {
+					prepare_calc_2 = new_ratio - supply_yes_squared - supply_no_squared;
+				}
+
 				token_amount = floor(sqrt(prepare_calc_2) - supply);
+			} else {
+				token_amount = amount;
+				fee_with_arb_profit_tax = fee;
 			}
 
-
-			// for stats
-			const next_coef = this.coef * ((reserve + fee) / reserve);
+			const next_coef = this.coef * new_reserve / (new_reserve - fee_with_arb_profit_tax);
 
 			const yes_price = next_coef * ((type == 'yes' ? supply : this.supply_yes) / new_den);
 			const no_price = next_coef * ((type == 'no' ? supply : this.supply_no) / new_den);
 			const draw_price = this.allow_draw ? next_coef * ((type == 'draw' ? supply : this.supply_draw) / new_den) : 0;
 
-			const res =  ({	
-				fee,
-				payout: 0,
+			const res = ({
+				fee: fee_with_arb_profit_tax,
+				gross_payout: 0,
 				old_coef: this.coef,
-				reserve_needed: reserve_amount - fee - this.network_fee,
-				new_reserve: reserve + fee,
+				reserve_needed: gross_reserve_delta - fee_with_arb_profit_tax,
+				new_reserve: new_reserve,
 				arb_profit_tax: arb_profit_tax_amount,
 				next_coef: next_coef,
 				yes_price: yes_price,
@@ -197,17 +202,25 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: token_amount
 			});
 
-			if(!readOnly) {
-				this.reserve = reserve + fee;
+			if (!readOnly) {
+				this.reserve = new_reserve;
 				this.coef = next_coef;
-				this.supply_yes += token_amount
+				if (type === 'yes') {
+					this.supply_yes += token_amount;
+				} else if (type === 'no') {
+					this.supply_no += token_amount;
+				} else {
+					this.supply_draw += token_amount;
+				}
+
 			}
 
 			return res;
 		}
 
 		this.add_liquidity = (reserve_amount, data = {}, readOnly = false) => {
-			const fee = reserve_amount * this.issue_fee;
+			const gross_reserve_delta = reserve_amount - this.network_fee; // gross, because it includes the fee and tax
+			const fee = ceil(gross_reserve_delta * this.issue_fee);
 
 			const reserve_amount_without_fee = reserve_amount - fee - this.network_fee;
 			const { yes_amount_ratio = 0, no_amount_ratio = 0 } = data;
@@ -222,6 +235,7 @@ describe('Check prediction AA: 1 (base)', function () {
 				yes_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(yes_amount_ratio));
 				no_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(no_amount_ratio));
 				draw_amount = this.allow_draw ? Math.floor(reserve_amount_without_fee * Math.sqrt(draw_amount_ratio)) : 0;
+
 			} else {
 				const ratio = (reserve_amount_without_fee + this.reserve) / this.reserve;
 
@@ -231,7 +245,7 @@ describe('Check prediction AA: 1 (base)', function () {
 			}
 
 			if (!readOnly) {
-				this.reserve += reserve_amount;
+
 				this.supply_yes += yes_amount;
 				this.supply_no += no_amount;
 
@@ -239,9 +253,14 @@ describe('Check prediction AA: 1 (base)', function () {
 					this.supply_draw += draw_amount;
 				}
 
-				const new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				const target_new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
+				const new_reserve = this.reserve + gross_reserve_delta;
 
-				const next_coef = this.coef * ((new_reserve + fee) / new_reserve);
+				const rounding_fee = this.reserve + gross_reserve_delta - target_new_reserve - fee;
+
+				this.reserve = new_reserve;
+
+				const next_coef = this.coef * new_reserve / (new_reserve - fee - rounding_fee);
 
 				this.coef = next_coef;
 			}
@@ -264,7 +283,7 @@ describe('Check prediction AA: 1 (base)', function () {
 				comparison: "==",
 				feed_name: this.feed_name,
 				datafeed_value: this.datafeed_value,
-				end_of_trading_period: this.end_of_trading_period,
+				event_date: this.event_date,
 				waiting_period_length: this.waiting_period_length,
 				reserve_asset: this.reserve_asset,
 				arb_profit_tax: this.arb_profit_tax,
@@ -339,7 +358,7 @@ describe('Check prediction AA: 1 (base)', function () {
 	it('Bob issues tokens by type (yes)', async () => {
 		const reserve_amount = 2e9;
 
-		const res = this.get_amount_by_type('yes', reserve_amount);
+		const res = this.get_result_for_buying_by_type('yes', reserve_amount);
 
 		const amount = res.reserve_needed + res.fee;
 
@@ -379,6 +398,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		]);
 
 		this.bob_yes_amount += res.amount;
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens by type (less amount)', async () => {
@@ -419,7 +439,7 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: amount
 			},
 		]);
-
+		this.check_reserve();
 	});
 
 	it('Alice issue tokens', async () => {
@@ -476,6 +496,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.alice_yes_amount += yes_amount;
 		this.alice_no_amount += no_amount;
+		this.check_reserve();
 	});
 
 	it('Alice issue tokens (not enough reserve)', async () => {
@@ -514,8 +535,6 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: amount
 			},
 		]);
-
-		// expect(response.response.error).to.equal(`expected reserve amount: ${Math.abs(res.reserve_needed + res.fee + 1e4)}`);
 	});
 
 	it('Alice redeem yes tokens', async () => {
@@ -551,6 +570,8 @@ describe('Check prediction AA: 1 (base)', function () {
 				amount: res.payout - res.fee
 			},
 		]);
+
+		this.check_reserve();
 	});
 
 	it('Bob issue tokens', async () => {
@@ -603,16 +624,15 @@ describe('Check prediction AA: 1 (base)', function () {
 			},
 		]);
 
-		this.bob_yes_amount = yes_amount;
-		this.bob_no_amount = no_amount;
+		this.bob_yes_amount += yes_amount;
+		this.bob_no_amount += no_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
 		const amount = 5e9;
-		const no_amount = this.get_amount_by_type('no', amount);
-		const res = this.buy(0, no_amount, 0);
-
-		const change = amount - res.reserve_needed - res.fee - this.network_fee;
+		const res = this.get_result_for_buying_by_type('no', amount);
 
 		const { unit, error } = await this.bob.sendMulti({
 			base_outputs: [{ address: this.prediction_address, amount: amount }],
@@ -644,15 +664,13 @@ describe('Check prediction AA: 1 (base)', function () {
 			{
 				address: this.bobAddress,
 				asset: this.no_asset,
-				amount: no_amount,
-			},
-			{
-				address: this.bobAddress,
-				amount: change,
+				amount: res.amount,
 			}
 		]);
 
-		this.bob_no_amount += no_amount;
+		this.bob_no_amount += res.amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob add liquidity', async () => {
@@ -685,8 +703,6 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.reserve).to.be.equal(this.reserve);
 		expect(Number(vars1.coef).toFixed(9)).to.be.equal(Number(this.coef).toFixed(9));
 
-		this.coef = vars1.coef;
-
 		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
@@ -704,10 +720,12 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		this.bob_no_amount += no_amount;
 		this.bob_yes_amount += yes_amount;
+
+		this.check_reserve();
 	});
 
 	it('Bob issues tokens after the period expires', async () => {
-		const { error } = await this.network.timetravel({ shift: (this.end_of_trading_period - this.current_timestamp + 100) * 1000 });
+		const { error } = await this.network.timetravel({ shift: (this.event_date - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
 
 		const yes_amount = 250;
@@ -786,7 +804,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
-		expect(response.response.error).to.be.equal("data_feed is empty");
+		expect(response.response.error).to.be.equal("data_feed not found");
 	});
 
 
@@ -885,9 +903,49 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
 		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+
+		this.reserve -= expect_payout;
 	});
 
-	it('Alice send lose token', async () => {
+	it('Bob claim profit', async () => {
+		const { unit, error } = await this.bob.sendMulti({
+			asset: this.yes_asset,
+			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
+			asset_outputs: [{ address: this.prediction_address, amount: this.bob_yes_amount }],
+			messages: [{
+				app: 'data',
+				payload: {
+					claim_profit: 1
+				}
+			}]
+		});
+
+		const price = (this.reserve / this.supply_yes);
+		const expect_payout = Math.floor(price * this.bob_yes_amount);
+
+		this.supply_yes -= this.bob_yes_amount;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+		expect(response.response.responseVars['profit']).to.be.equal(expect_payout);
+		expect(response.bounced).to.be.false;
+
+		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit });
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				amount: expect_payout
+			},
+		]);
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
+		expect(vars.supply_yes).to.be.equal(0);
+		expect(vars.reserve).to.be.equal(0);
+	});
+
+	it('Alice send lose token (and all profits have been paid)', async () => {
 		const { unit } = await this.alice.sendMulti({
 			asset: this.no_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
@@ -902,7 +960,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("winner supply < 0 or sending not a winner token")
+		expect(response.response.error).to.be.equal("BUG winner supply = 0")
 	});
 
 	after(async () => {

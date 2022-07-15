@@ -33,11 +33,14 @@
 
 		require(exists($datafeed_value), "datafeed_value does not exist");
 
-		$end_of_trading_period = params.end_of_trading_period OTHERWISE 0;
-		require(is_integer($end_of_trading_period) AND $end_of_trading_period > 0, "end_of_trading_period must be integer");
+		$event_date = params.event_date OTHERWISE 0;
+		require(is_integer($event_date) AND $event_date > 0, "event_date must be integer");
 
 		$waiting_period_length = params.waiting_period_length OTHERWISE 5 * 24 * 3600;
-		require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "trading period must be longer than a day");
+		require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "waiting period must be integer");
+
+		$quiet_period = params.quiet_period OTHERWISE 0;
+		require(is_integer($quiet_period) AND $quiet_period >= 0, "quiet period must be integer");
 
 		$issue_fee = exists(params.issue_fee) ? params.issue_fee : 0.01;
 		require($issue_fee >= 0 AND $issue_fee < 1, "issue_fee isn't valid");
@@ -54,7 +57,7 @@
 		$no_asset = var['no_asset'];
 		$draw_asset = var['draw_asset'];
 
-		$end_of_waiting_period = $end_of_trading_period + $waiting_period_length;
+		$end_of_waiting_period = $event_date + $waiting_period_length;
 
 		$network_fee = ($reserve_asset == 'base') ? 10000 : 0;
 		
@@ -141,7 +144,7 @@
 						bounce("invalid min_expected_amount");
 					}
 
-					if (!(timestamp <= $end_of_trading_period OR timestamp >= $end_of_waiting_period)){
+					if (!(timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period)){
 						$error = "the trading period is closed";
 						response['error'] = $error;
 						return;
@@ -291,10 +294,11 @@
 			{ // add liquidity
 				if: `{$ready AND trigger.data.add_liquidity AND $reserve_amount > $network_fee}`,
 				init: `{
-					$fee = $reserve_amount * $issue_fee;
+					$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
+					$fee = ceil($gross_reserve_delta * $issue_fee);
 					$reserve_amount_without_fee = $reserve_amount - $fee - $network_fee;
 					
-					if ((timestamp <= $end_of_trading_period OR timestamp >= $end_of_waiting_period) AND !$result) {
+					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
 
 						if ($supply_yes + $supply_no + $supply_draw == 0) {
 							$yes_amount_ratio = trigger.data.yes_amount_ratio OTHERWISE 0;
@@ -375,8 +379,6 @@
 						if: "{!$hasError}",
 						app: 'state',
 						state: `{
-							var['reserve'] += $reserve_amount;
-
 							var['supply_yes'] += $yes_amount;
 							response['supply_yes'] = var['supply_yes'] OTHERWISE 0;
 
@@ -392,11 +394,14 @@
 							$new_supply_no = var['supply_no'] OTHERWISE 0;
 							$new_supply_draw = var['supply_draw'] OTHERWISE 0;
 
-							$new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
+							$target_new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
 
-							$next_coef = (var['coef'] OTHERWISE 1) * (($new_reserve + $fee) / $new_reserve);
-							
+							$new_reserve = var['reserve'] + $gross_reserve_delta;
+
+							$next_coef = (var['coef'] OTHERWISE 1) * $new_reserve / $target_new_reserve;
+
 							var['coef'] = $next_coef;
+							var['reserve'] += $gross_reserve_delta;
 
 							// for stats
 							response['yes_amount'] = $yes_amount OTHERWISE 0;
@@ -423,12 +428,12 @@
 			{ // commit result
 				if: `{$ready AND trigger.data.commit AND !$result}`,
 				init: `{
-					require(timestamp > $end_of_trading_period, "trading period has not yet ended");
+					require(timestamp > $event_date, "trading period has not yet ended");
 					
 					$current_datafeed_value = data_feed[[oracles=$oracle, feed_name=$feed_name, ifnone=false]];
 
 					require(exists($current_datafeed_value), "data_feed not found");
-					require(timestamp > $end_of_trading_period, "trading period has not ended yet");
+					require(timestamp > $event_date, "trading period has not ended yet");
 					require(timestamp < $end_of_waiting_period, "too late, the waiting period is over");
 
 					if ($comparison == '>')
