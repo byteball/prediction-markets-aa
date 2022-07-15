@@ -1,7 +1,7 @@
 {
 	doc_url: "https://obyte.org/prediction-factory.json",
 	init: `{
-		$prediction_base_aa = 'CCDBVS63PMWSSIDXYLH7HP6TNOBVPATW';
+		$prediction_base_aa = 'XYKTOGRWR4ZLNS54RR4JGGP5NW74RZO7';
 	}`,
 	messages: {
 		cases: [

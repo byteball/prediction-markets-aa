@@ -398,10 +398,7 @@
 
 							$new_reserve = var['reserve'] + $gross_reserve_delta;
 
-							$rounding_fee = var['reserve'] + $gross_reserve_delta - $target_new_reserve - $fee;
-							require($rounding_fee >= 0, 'BUG: rounding_fee < 0');
-
-							$next_coef = (var['coef'] OTHERWISE 1) * $new_reserve / ($new_reserve - $fee - $rounding_fee);
+							$next_coef = (var['coef'] OTHERWISE 1) * $new_reserve / $target_new_reserve;
 
 							var['coef'] = $next_coef;
 							var['reserve'] += $gross_reserve_delta;
@@ -413,7 +410,7 @@
 
 							response['next_reserve'] = var['reserve'];
 							response['next_coef'] = $next_coef;
-							response['fee'] = $fee + $rounding_fee;
+							response['fee'] = $fee;
 							
 							$new_den = sqrt($new_supply_yes * $new_supply_yes + $new_supply_no * $new_supply_no + $new_supply_draw * $new_supply_draw);
 							
