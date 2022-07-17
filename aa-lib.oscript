@@ -168,9 +168,9 @@
 			// for stats
 			$next_coef = $coef * $new_reserve / ($new_reserve - $fee_with_arb_profit_tax);
 
-			$yes_price = $next_coef * (($type == 'yes' ? $supply : $supply_yes) / $new_den);
-			$no_price = $next_coef * (($type == 'no' ? $supply : $supply_no) / $new_den);
-			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $supply : $supply_draw) / $new_den) : 0;
+			$yes_price = $next_coef * (($type == 'yes' ? $new_supply : $supply_yes) / $new_den);
+			$no_price = $next_coef * (($type == 'no' ? $new_supply : $supply_no) / $new_den);
+			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $new_supply : $supply_draw) / $new_den) : 0;
 
 			{	
 				fee: $fee_with_arb_profit_tax,
