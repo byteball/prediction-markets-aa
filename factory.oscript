@@ -67,7 +67,7 @@
 					require(is_integer($event_date) AND $event_date > timestamp, "event_date must be integer");
 
 					$waiting_period_length = trigger.data.waiting_period_length OTHERWISE 5 * 24 * 3600;
-					require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "trading period must be longer than a day");
+					require(is_integer($waiting_period_length) AND $waiting_period_length >= 0, "waiting period must be integer");
 
 					$quiet_period = params.quiet_period OTHERWISE 0;
 					require(is_integer($quiet_period) AND $quiet_period >= 0, "quiet period must be integer");
