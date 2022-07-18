@@ -168,9 +168,14 @@
 			// for stats
 			$next_coef = $coef * $new_reserve / ($new_reserve - $fee_with_arb_profit_tax);
 
-			$yes_price = $next_coef * (($type == 'yes' ? $new_supply : $supply_yes) / $new_den);
-			$no_price = $next_coef * (($type == 'no' ? $new_supply : $supply_no) / $new_den);
-			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $new_supply : $supply_draw) / $new_den) : 0;
+			$supply_by_type = $supply + $token_amount;
+			$supply_by_type_squared = $supply_by_type * $supply_by_type;
+			$den = sqrt(($type == 'yes' ? $supply_by_type_squared : $supply_yes_squared) + ($type == 'no' ? $supply_by_type_squared : $supply_no_squared) + ($type == 'draw' ? $supply_by_type_squared : $supply_draw_squared));
+
+			$yes_price = $next_coef * (($type == 'yes' ? $supply_by_type : $supply_yes) / $den);
+			$no_price = $next_coef * (($type == 'no' ? $supply_by_type : $supply_no) / $den);
+			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $supply_by_type : $supply_draw) / $den) : 0;
+
 
 			{	
 				fee: $fee_with_arb_profit_tax,

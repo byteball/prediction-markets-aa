@@ -1,13 +1,13 @@
 {
 	doc_url: "https://prophet.ooo/prediction-markets.json",
 	getters: `{
-		$lib_aa_const = "BM4MLZLB272PRAHDBU7RNYPLXNWRF5XV";
+		$lib_aa_const = "QFWV6VIUE6T4N5LMJEVXGFY3ZMQBDZU2";
 
 		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#2.$get_reserve(this_address, $yes_amount, $no_amount, $draw_amount);
 
 		$get_exchange_result = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#11.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);
 
-		$get_result_for_buying_by_type = ($type, $reserve_amount) => ($lib_aa_const||'')#10.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
+		$get_result_for_buying_by_type = ($type, $reserve_amount) => ($lib_aa_const||'')#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
 	}`,
 	init: `{
@@ -160,7 +160,7 @@
 
 						require(trigger.output[[asset=$reserve_asset]] > $network_fee, 'You sent no reserve');
 
-						$res = $lib_aa#10.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
+						$res = $lib_aa#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
 						if ($type == 'yes') {
 							$yes_amount = $res.amount;
