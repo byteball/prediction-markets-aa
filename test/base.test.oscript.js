@@ -628,6 +628,14 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.bob_no_amount += no_amount;
 
 		this.check_reserve();
+
+		const responseVars = response.response.responseVars;
+		const new_den = sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2);
+		const yes_price = this.coef * (this.supply_yes / new_den);
+		const no_price = this.coef * (this.supply_no / new_den);
+	
+		expect(Number(responseVars.yes_price).toFixed(9)).to.be.equal(yes_price.toFixed(9));
+		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
 	});
 
 	it('Bob issues tokens by type (no)', async () => {
@@ -671,6 +679,14 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.bob_no_amount += res.amount;
 
 		this.check_reserve();
+
+		const responseVars = response.response.responseVars;
+		const new_den = sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2);
+		const yes_price = this.coef * (this.supply_yes / new_den);
+		const no_price = this.coef * (this.supply_no / new_den);
+	
+		expect(Number(responseVars.yes_price).toFixed(9)).to.be.equal(yes_price.toFixed(9));
+		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
 	});
 
 	it('Bob add liquidity', async () => {
@@ -722,6 +738,14 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.bob_yes_amount += yes_amount;
 
 		this.check_reserve();
+
+		const responseVars = response.response.responseVars;
+		const new_den = sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2);
+		const yes_price = this.coef * (this.supply_yes / new_den);
+		const no_price = this.coef * (this.supply_no / new_den);
+	
+		expect(Number(responseVars.yes_price).toFixed(9)).to.be.equal(yes_price.toFixed(9));
+		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
 	});
 
 	it('Bob issues tokens after the period expires', async () => {
