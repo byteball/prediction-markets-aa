@@ -170,7 +170,7 @@
 							$yes_amount = 0;
 							$no_amount = $res.amount;
 							$draw_amount = 0;
-						} else if ($type == 'no') { 
+						} else if ($type == 'draw') { 
 							$yes_amount = 0;
 							$no_amount = 0;
 							$draw_amount = $res.amount;
@@ -428,13 +428,10 @@
 			{ // commit result
 				if: `{$ready AND trigger.data.commit AND !$result}`,
 				init: `{
-					require(timestamp > $event_date, "trading period has not yet ended");
-					
 					$current_datafeed_value = data_feed[[oracles=$oracle, feed_name=$feed_name, ifnone=false]];
 
 					require(exists($current_datafeed_value), "data_feed not found");
 					require(timestamp > $event_date, "trading period has not ended yet");
-					require(timestamp < $end_of_waiting_period, "too late, the waiting period is over");
 
 					if ($comparison == '>')
 						$datafeed_comparison = $current_datafeed_value > $datafeed_value;

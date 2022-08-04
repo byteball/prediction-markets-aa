@@ -679,6 +679,51 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 		this.check_reserve();
 	});
 
+	it('Bob issues tokens by type (draw)', async () => {
+		const res = this.get_result_for_buying_by_type('draw', 5e9);
+
+		const amount = 5e9;
+
+		const { unit, error } = await this.bob.sendMulti({
+			base_outputs: [{ address: this.prediction_address, amount: amount }],
+			messages: [{
+				app: 'data',
+				payload: {
+					type: 'draw'
+				}
+			}]
+		})
+
+		expect(error).to.be.null
+		expect(unit).to.be.validUnit
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
+
+		await this.network.witnessUntilStable(response.response_unit);
+
+		expect(response.bounced).to.be.false;
+		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
+
+		expect(vars1.supply_yes).to.be.equal(this.supply_yes);
+		expect(vars1.supply_no).to.be.equal(this.supply_no);
+		expect(vars1.supply_draw).to.be.equal(this.supply_draw);
+		expect(vars1.reserve).to.be.equal(this.reserve);
+
+		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
+
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				asset: this.draw_asset,
+				amount: res.amount
+			}
+		]);
+
+		this.bob_draw_amount += res.amount;
+
+		this.check_reserve();
+	});
+
 	it('Bob issues tokens after the period expires', async () => {
 		const { error } = await this.network.timetravel({ shift: (this.event_date - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
