@@ -724,6 +724,73 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 		this.check_reserve();
 	});
 
+	it('Bob add liquidity', async () => {
+		const amount = 3e9;
+
+		const { unit, error } = await this.bob.sendMulti({
+			base_outputs: [{ address: this.prediction_address, amount: amount }],
+			messages: [{
+				app: 'data',
+				payload: {
+					add_liquidity: 1
+				}
+			}]
+		});
+
+		expect(error).to.be.null
+		expect(unit).to.be.validUnit
+
+		const { yes_amount, no_amount, draw_amount } = this.add_liquidity(amount);
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
+
+		await this.network.witnessUntilStable(response.response_unit);
+
+		expect(response.bounced).to.be.false;
+		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
+
+		expect(vars1.supply_yes).to.be.equal(this.supply_yes);
+		expect(vars1.supply_no).to.be.equal(this.supply_no);
+		expect(vars1.reserve).to.be.equal(this.reserve);
+		expect(Number(vars1.coef).toFixed(9)).to.be.equal(Number(this.coef).toFixed(9));
+
+		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
+
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				asset: this.yes_asset,
+				amount: yes_amount,
+			},
+			{
+				address: this.bobAddress,
+				asset: this.no_asset,
+				amount: no_amount,
+			},
+			{
+				address: this.bobAddress,
+				asset: this.draw_asset,
+				amount: draw_amount,
+			},
+		]);
+
+		this.bob_no_amount += no_amount;
+		this.bob_yes_amount += yes_amount;
+		this.bob_draw_amount += draw_amount;
+
+		this.check_reserve();
+
+		const responseVars = response.response.responseVars;
+		const new_den = sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2);
+		const yes_price = this.coef * (this.supply_yes / new_den);
+		const no_price = this.coef * (this.supply_no / new_den);
+		const draw_price = this.coef * (this.supply_draw / new_den);
+
+		expect(Number(responseVars.yes_price).toFixed(9)).to.be.equal(yes_price.toFixed(9));
+		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
+		expect(Number(responseVars.draw_price).toFixed(9)).to.be.equal(draw_price.toFixed(9));
+	});
+
 	it('Bob issues tokens after the period expires', async () => {
 		const { error } = await this.network.timetravel({ shift: (this.event_date - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
