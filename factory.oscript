@@ -63,7 +63,7 @@
 					$datafeed_value = trigger.data.datafeed_value;
 					require(exists($datafeed_value), "datafeed_value does not exist");		
 
-					$event_date = trigger.data.event_date OTHERWISE 0;
+					$event_date = parse_date(trigger.data.event_date);
 					require(is_integer($event_date) AND $event_date > timestamp, "event_date must be integer");
 
 					$waiting_period_length = trigger.data.waiting_period_length OTHERWISE 5 * 24 * 3600;
