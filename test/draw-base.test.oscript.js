@@ -4,6 +4,7 @@
 const { expect } = require('chai');
 const Decimal = require('decimal.js');
 const path = require('path');
+const moment = require('moment');
 
 describe('Check prediction AA: 4 (draw-base)', function () {
 	this.timeout(120000)
@@ -13,7 +14,6 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 			.with.agent({ predictionBaseAgent: path.join(__dirname, "../agent.oscript") })
 			.with.agent({ aaLib: path.join(__dirname, "../aa-lib.oscript") })
 			.with.agent({ predictionFactoryAgent: path.join(__dirname, "../factory.oscript") })
-			.with.agent({ forwarderAgent: path.join(__dirname, "../define-asset-forwarder.oscript") })
 			.with.asset({ reserveAsset: {} })
 			.with.wallet({ alice: { base: 50e9, reserveAsset: 50e9 } })
 			.with.wallet({ bob: { base: 50e9, reserveAsset: 50e9 } })
@@ -284,7 +284,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 				feed_name: this.feed_name,
 				allow_draw: true,
 				datafeed_value: this.datafeed_value,
-				event_date: this.event_date,
+				event_date: moment.unix(this.event_date).utc().format('YYYY-MM-DDTHH:mm:ss'),
 				waiting_period_length: this.waiting_period_length,
 				reserve_asset: this.reserve_asset,
 				arb_profit_tax: this.arb_profit_tax,
