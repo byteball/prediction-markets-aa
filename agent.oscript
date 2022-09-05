@@ -295,8 +295,6 @@
 				if: `{$ready AND trigger.data.add_liquidity AND $reserve_amount > $network_fee}`,
 				init: `{
 					$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
-					$fee = ceil($gross_reserve_delta * $issue_fee);
-					$reserve_amount_without_fee = $reserve_amount - $fee - $network_fee;
 					
 					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
 
@@ -319,12 +317,12 @@
 
 							require($yes_amount_ratio >= 0 AND $no_amount_ratio >= 0 AND $yes_amount_ratio + $no_amount_ratio + $draw_amount_ratio == 1, 'yes_amount_ratio + no_amount_ratio + draw_amount_ratio must be equal 1');
 
-							$yes_amount = floor($reserve_amount_without_fee * sqrt($yes_amount_ratio));
-							$no_amount = floor($reserve_amount_without_fee * sqrt($no_amount_ratio));
-							$draw_amount = $allow_draw ? floor($reserve_amount_without_fee * sqrt($draw_amount_ratio)) : 0;
+							$yes_amount = floor($gross_reserve_delta * sqrt($yes_amount_ratio));
+							$no_amount = floor($gross_reserve_delta * sqrt($no_amount_ratio));
+							$draw_amount = $allow_draw ? floor($gross_reserve_delta * sqrt($draw_amount_ratio)) : 0;
 
 						} else {
-							$ratio = ($reserve_amount_without_fee + $reserve) / $reserve;
+							$ratio = ($gross_reserve_delta + $reserve) / $reserve;
 
 							$yes_amount = floor($ratio * $supply_yes - $supply_yes);
 							$no_amount = floor($ratio * $supply_no - $supply_no);
@@ -410,7 +408,7 @@
 
 							response['next_reserve'] = var['reserve'];
 							response['next_coef'] = $next_coef;
-							response['fee'] = $fee;
+							response['fee'] = 0;
 							
 							$new_den = sqrt($new_supply_yes * $new_supply_yes + $new_supply_no * $new_supply_no + $new_supply_draw * $new_supply_draw);
 							
