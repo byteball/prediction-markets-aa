@@ -1,7 +1,7 @@
 {
 	doc_url: "https://prophet.ooo/prediction-factory.json",
 	init: `{
-		$prediction_base_aa = 'AXG7G57VBLAHF3WRN5WMQ53KQEQDRONC';
+		$prediction_base_aa = 'SXYHOGOYGHNATU7NMEQDDGLMV2AA5M7K';
 	}`,
 	messages: {
 		cases: [

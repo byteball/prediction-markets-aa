@@ -60,7 +60,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 		this.network_fee = (this.reserve_asset == 'base' ? 10000 : 0);
 
 		this.check_reserve = () => {
-			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.oneOf([this.reserve, this.reserve + 1]);
+			expect(ceil(this.coef * sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2))).to.be.closeTo(this.reserve, 3);
 		}
 
 		this.buy = (amount_yes, amount_no, amount_draw, readOnly) => {
@@ -220,9 +220,6 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 
 		this.add_liquidity = (reserve_amount, data = {}, readOnly = false) => {
 			const gross_reserve_delta = reserve_amount - this.network_fee; // gross, because it includes the fee and tax
-			const fee = ceil(gross_reserve_delta * this.issue_fee);
-
-			const reserve_amount_without_fee = reserve_amount - fee - this.network_fee;
 			const { yes_amount_ratio = 0, no_amount_ratio = 0 } = data;
 
 			let yes_amount;
@@ -232,12 +229,12 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 			if (this.supply_yes + this.supply_no + this.supply_draw === 0) {
 				const draw_amount_ratio = 1 - yes_amount_ratio - no_amount_ratio;
 
-				yes_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(yes_amount_ratio));
-				no_amount = Math.floor(reserve_amount_without_fee * Math.sqrt(no_amount_ratio));
-				draw_amount = this.allow_draw ? Math.floor(reserve_amount_without_fee * Math.sqrt(draw_amount_ratio)) : 0;
+				yes_amount = Math.floor(gross_reserve_delta * Math.sqrt(yes_amount_ratio));
+				no_amount = Math.floor(gross_reserve_delta * Math.sqrt(no_amount_ratio));
+				draw_amount = this.allow_draw ? Math.floor(gross_reserve_delta * Math.sqrt(draw_amount_ratio)) : 0;
 
 			} else {
-				const ratio = (reserve_amount_without_fee + this.reserve) / this.reserve;
+				const ratio = (gross_reserve_delta + this.reserve) / this.reserve;
 
 				yes_amount = floor(ratio * this.supply_yes - this.supply_yes);
 				no_amount = floor(ratio * this.supply_no - this.supply_no);
@@ -253,16 +250,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 					this.supply_draw += draw_amount;
 				}
 
-				const target_new_reserve = Math.ceil(this.coef * Math.sqrt(this.supply_yes ** 2 + this.supply_no ** 2 + this.supply_draw ** 2));
-				const new_reserve = this.reserve + gross_reserve_delta;
-
-				const rounding_fee = this.reserve + gross_reserve_delta - target_new_reserve - fee;
-
-				this.reserve = new_reserve;
-
-				const next_coef = this.coef * new_reserve / (new_reserve - fee - rounding_fee);
-
-				this.coef = next_coef;
+				this.reserve += gross_reserve_delta;
 			}
 
 			return {
