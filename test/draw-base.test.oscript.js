@@ -833,7 +833,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
-		expect(response.response.error).to.be.equal("data_feed not found");
+		expect(response.response.error.message).to.be.equal("data_feed not found");
 	});
 
 
@@ -855,7 +855,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 
-		expect(response.response.error).to.be.equal("no results yet");
+		expect(response.response.error.message).to.be.equal("no results yet");
 	});
 
 	it('Operator posts data feed', async () => {
@@ -949,7 +949,7 @@ describe('Check prediction AA: 4 (draw-base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("please send only the winner token")
+		expect(response.response.error.message).to.be.equal("please send only the winner token")
 	});
 
 	after(async () => {

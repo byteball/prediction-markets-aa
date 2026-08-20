@@ -588,7 +588,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
-		expect(response.response.error).to.be.equal("data_feed not found");
+		expect(response.response.error.message).to.be.equal("data_feed not found");
 	});
 
 
@@ -612,7 +612,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 		await this.network.witnessUntilStable(response.response_unit);
 
-		expect(response.response.error).to.be.equal("no results yet");
+		expect(response.response.error.message).to.be.equal("no results yet");
 	});
 
 	it('Alice redeems her tokens', async () => {
