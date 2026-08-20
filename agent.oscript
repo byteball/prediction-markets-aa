@@ -57,6 +57,8 @@
 		$no_asset = var['no_asset'];
 		$draw_asset = var['draw_asset'];
 
+		$received_outcome_tokens = $ready ? (trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0)) : false;
+
 		$end_of_waiting_period = $event_date + $waiting_period_length;
 
 		$network_fee = ($reserve_asset == 'base') ? 10000 : 0;
@@ -130,11 +132,11 @@
 				]
 			},
 			{ // mint or redeem tokens
-				if: `{$ready AND !exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (((trigger.output[[asset=$reserve_asset]] > $network_fee) AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0))}`,
+				if: `{$ready AND !exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (((trigger.output[[asset=$reserve_asset]] > $network_fee) AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $received_outcome_tokens)}`,
 				init: `{
 					require($allow_draw OR !exists(trigger.data.draw_amount), "draw asset does not exist");
 
-					if ((trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0)) AND trigger.data.type) {
+					if ((trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR $received_outcome_tokens) AND trigger.data.type) {
 						bounce("both type and amount");
 					}
 					
@@ -254,9 +256,15 @@
 						}
 					},
 					{
-						if: "{!$error}",
 						app: 'state',
 						state: `{
+							if ($error) {
+								// soft bounce returns the reserve asset only, the outcome tokens would be lost
+								if ($received_outcome_tokens)
+									bounce($error);
+								return;
+							}
+
 							response['next_reserve'] = $res.new_reserve  OTHERWISE 0;
 							response['next_coef'] = $res.next_coef OTHERWISE 1;
 
@@ -294,6 +302,8 @@
 			{ // add liquidity
 				if: `{$ready AND trigger.data.add_liquidity AND $reserve_amount > $network_fee}`,
 				init: `{
+					require(!$received_outcome_tokens, "outcome tokens are not accepted when adding liquidity");
+
 					$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
 					
 					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {

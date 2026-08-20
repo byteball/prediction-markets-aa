@@ -728,6 +728,42 @@ describe('Check prediction AA: 3 (draw-asset)', function () {
 		expect(response.response.responseVars.error).to.equal("the trading period is closed");
 	});
 
+	it('Alice redeems yes tokens after the period expires (bounced, tokens returned)', async () => {
+		const yes_amount_redeem = 1e6;
+
+		const { unit, error } = await this.alice.sendMulti({
+			asset: this.yes_asset,
+			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
+			asset_outputs: [{ address: this.prediction_address, amount: yes_amount_redeem }],
+		});
+
+		expect(error).to.be.null
+		expect(unit).to.be.validUnit
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("the trading period is closed");
+
+		await this.network.witnessUntilStable(response.response_unit);
+
+		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit });
+
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				asset: this.yes_asset,
+				address: this.aliceAddress,
+				amount: yes_amount_redeem
+			},
+		]);
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+
+		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+		expect(vars.supply_draw).to.be.equal(this.supply_draw);
+		expect(vars.reserve).to.be.equal(this.reserve);
+	});
+
 	it('Bob commit result (without data_value)', async () => {
 		const { unit, error } = await this.network.wallet.bob.triggerAaWithData({
 			toAddress: this.prediction_address,
