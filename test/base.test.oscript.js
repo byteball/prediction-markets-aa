@@ -349,7 +349,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		await this.network.witnessUntilStable(response.response_unit);
 
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("draw asset does not exist");
+		expect(response.response.error.message).to.be.equal("draw asset does not exist");
 	});
 
 	it('Bob issues tokens by type (yes)', async () => {
@@ -825,7 +825,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
-		expect(response.response.error).to.be.equal("data_feed not found");
+		expect(response.response.error.message).to.be.equal("data_feed not found");
 	});
 
 
@@ -847,7 +847,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 
-		expect(response.response.error).to.be.equal("no results yet");
+		expect(response.response.error.message).to.be.equal("no results yet");
 	});
 
 	it('Operator posts data feed', async () => {
@@ -981,7 +981,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 		expect(response.bounced).to.be.true;
-		expect(response.response.error).to.be.equal("BUG winner supply = 0")
+		expect(response.response.error.message).to.be.equal("BUG winner supply = 0")
 	});
 
 	after(async () => {
