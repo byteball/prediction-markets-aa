@@ -259,7 +259,7 @@
 						app: 'state',
 						state: `{
 							if ($error) {
-								// soft bounce returns the reserve asset only, the outcome tokens would be lost
+								// soft bounce returns the reserve asset only
 								if ($received_outcome_tokens)
 									bounce($error);
 								return;
