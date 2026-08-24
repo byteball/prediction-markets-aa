@@ -132,7 +132,7 @@
 				]
 			},
 			{ // mint or redeem tokens
-				if: `{$ready AND !exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (((trigger.output[[asset=$reserve_asset]] > $network_fee) AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $received_outcome_tokens)}`,
+				if: `{$ready AND !exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (($reserve_amount > $network_fee AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $received_outcome_tokens)}`,
 				init: `{
 					require($allow_draw OR !exists(trigger.data.draw_amount), "draw asset does not exist");
 
@@ -160,7 +160,7 @@
 				
 					if ($type) {
 
-						require(trigger.output[[asset=$reserve_asset]] > $network_fee, 'You sent no reserve');
+						require($reserve_amount > $network_fee, 'You sent no reserve');
 
 						$res = $lib_aa#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
