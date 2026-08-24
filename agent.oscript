@@ -49,13 +49,13 @@
 		require($redeem_fee >= 0 AND $redeem_fee < 1, "redeem_fee isn't valid");
 	
 		// helpers
-		$ready = var['yes_asset'] AND var['no_asset'] AND (var['draw_asset'] OR !$allow_draw);
-
 		$result = var['result']; // yes/no/draw
 
 		$yes_asset = var['yes_asset'];
 		$no_asset = var['no_asset'];
 		$draw_asset = var['draw_asset'];
+
+		$ready = $yes_asset AND $no_asset AND ($draw_asset OR !$allow_draw);
 
 		$received_outcome_tokens = $ready ? (trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0)) : false;
 
