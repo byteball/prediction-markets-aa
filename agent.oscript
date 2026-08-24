@@ -57,7 +57,7 @@
 
 		$ready = $yes_asset AND $no_asset AND ($draw_asset OR !$allow_draw);
 
-		$received_outcome_tokens = $ready ? (trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0)) : false;
+		$received_outcome_tokens = $ready AND (trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0));
 
 		$end_of_waiting_period = $event_date + $waiting_period_length;
 
