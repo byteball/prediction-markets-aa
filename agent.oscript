@@ -148,13 +148,11 @@
 
 					if (!(timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period)){
 						$error = "the trading period is closed";
-						response['error'] = $error;
 						return;
 					}
 
 					if ($result) {
 						$error = "result already exists";
-						response['error'] = $error;
 						return;
 					}
 				
@@ -180,7 +178,6 @@
 
 						if ($res.amount < $min_expected_amount) {
 							$error = "amount less than minimum";
-							response['error'] = $error;
 							return;
 						}
 
@@ -208,7 +205,6 @@
 
 						if ($res.reserve_needed > 0 AND ($res.reserve_needed + $res.fee + $network_fee > $reserve_amount)) {
 							$error = "expected reserve amount: " || ($res.reserve_needed + $res.fee + $network_fee);
-							response['error'] = $error;
 							return;
 						}
 					}
@@ -262,6 +258,7 @@
 								// soft bounce returns the reserve asset only
 								if ($received_outcome_tokens)
 									bounce($error);
+								response['error'] = $error;
 								return;
 							}
 
