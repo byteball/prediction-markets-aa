@@ -552,6 +552,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		await this.network.witnessUntilStable(unit);
 
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+		expect(response.bounced).to.be.false;
 
 		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
 

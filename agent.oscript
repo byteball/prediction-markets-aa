@@ -203,7 +203,7 @@
 						$res = $lib_aa#11.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);	
 						$payout = floor($res.gross_payout + $reserve_amount - $res.reserve_needed - $res.fee - $network_fee);
 
-						if ($res.reserve_needed > 0 AND ($res.reserve_needed + $res.fee + $network_fee > $reserve_amount)) {
+						if ($payout < 0) {
 							$error = "expected reserve amount: " || ($res.reserve_needed + $res.fee + $network_fee);
 							return;
 						}
