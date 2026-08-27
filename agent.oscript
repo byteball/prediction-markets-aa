@@ -292,6 +292,9 @@
 								var['supply_draw'] += $draw_amount;
 								response['supply_draw'] = var['supply_draw'] OTHERWISE 0;
 							}
+
+							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
+							require($res.new_reserve - $reserve <= $reserve_amount, "reserve grows by more than the added reserve amount");
 						}`
 					},
 				]
