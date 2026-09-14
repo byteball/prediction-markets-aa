@@ -485,11 +485,7 @@
 						state: `{
 							response["profit"] = $payout;
 
-							var['supplies'] = {
-								yes: $yes_amount > 0 ? $supplies.yes - $yes_amount : $supplies.yes,
-								no: $no_amount > 0 ? $supplies.no - $no_amount : $supplies.no,
-								draw: $allow_draw AND $draw_amount > 0 ? $supplies.draw - $draw_amount : $supplies.draw
-							};
+							var['supplies'] = $sum_by_outcome($supplies, {yes: -$yes_amount, no: -$no_amount, draw: -$draw_amount});
 
 							var['reserve'] -= $payout;
 						}`
