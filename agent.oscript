@@ -1,7 +1,7 @@
 {
 	doc_url: "https://prophet.ooo/prediction-markets.json",
 	getters: `{
-		$lib_aa_const = "QFWV6VIUE6T4N5LMJEVXGFY3ZMQBDZU2";
+		$lib_aa_const = "7VZOC2RRO3RQOWBZGAVASNCEF6O5ISWP";
 
 		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#2.$get_reserve(this_address, $yes_amount, $no_amount, $draw_amount);
 
@@ -9,7 +9,10 @@
 
 		$get_result_for_buying_by_type = ($type, $reserve_amount) => ($lib_aa_const||'')#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
-	}`,
+		$get_supplies = () => {
+			var['supplies'] OTHERWISE {yes: 0, no: 0, draw: 0}
+		};
+ 	}`,
 	init: `{
 		$lib_aa = $lib_aa_const || '';
 
@@ -68,9 +71,7 @@
 
 		$type = trigger.data.type OTHERWISE false;
 		
-		$supply_yes = var['supply_yes'] OTHERWISE 0;
-		$supply_no = var['supply_no'] OTHERWISE 0;
-		$supply_draw = var['supply_draw'] OTHERWISE 0;
+		$supplies = $get_supplies();
 
 		$to = trigger.data.to OTHERWISE trigger.address;
 
@@ -282,16 +283,11 @@
 
 							response['arb_profit_tax'] = $res.arb_profit_tax;
 
-							var['supply_yes'] += $yes_amount;
-							response['supply_yes'] = var['supply_yes'] OTHERWISE 0;
-
-							var['supply_no'] += $no_amount;
-							response['supply_no'] = var['supply_no'] OTHERWISE 0;
-
-							if ($allow_draw) {
-								var['supply_draw'] += $draw_amount;
-								response['supply_draw'] = var['supply_draw'] OTHERWISE 0;
-							}
+							var['supplies'] = {
+								yes: $supplies.yes + $yes_amount,
+								no: $supplies.no + $no_amount,
+								draw: $allow_draw ? $supplies.draw + $draw_amount : 0
+							};
 
 							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
 							require($res.new_reserve - $reserve <= $reserve_amount, "reserve grows by more than the added reserve amount");
@@ -308,7 +304,7 @@
 					
 					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
 
-						if ($supply_yes + $supply_no + $supply_draw == 0) {
+						if ($supplies.yes + $supplies.no + $supplies.draw == 0) {
 							$yes_amount_ratio = trigger.data.yes_amount_ratio OTHERWISE 0;
 							require($yes_amount_ratio >= 0, 'yes ratio isnt valid');
 
@@ -334,9 +330,9 @@
 						} else {
 							$ratio = ($gross_reserve_delta + $reserve) / $reserve;
 
-							$yes_amount = floor($ratio * $supply_yes - $supply_yes);
-							$no_amount = floor($ratio * $supply_no - $supply_no);
-							$draw_amount = floor($ratio * $supply_draw - $supply_draw);
+							$yes_amount = floor($ratio * $supplies.yes - $supplies.yes);
+							$no_amount = floor($ratio * $supplies.no - $supplies.no);
+							$draw_amount = floor($ratio * $supplies.draw - $supplies.draw);
 						}
 					} else {
 						$hasError = true;
@@ -387,22 +383,15 @@
 						if: "{!$hasError}",
 						app: 'state',
 						state: `{
-							var['supply_yes'] += $yes_amount;
-							response['supply_yes'] = var['supply_yes'] OTHERWISE 0;
+							var['supplies'] = {
+								yes: $supplies.yes + $yes_amount,
+								no: $supplies.no + $no_amount,
+								draw: $allow_draw ? $supplies.draw + $draw_amount : 0
+							};
 
-							var['supply_no'] += $no_amount;
-							response['supply_no'] = var['supply_no'] OTHERWISE 0;
+							$new_supplies = $get_supplies();
 
-							if ($allow_draw) {
-								var['supply_draw'] += $draw_amount;
-								response['supply_draw'] = var['supply_draw'] OTHERWISE 0;
-							}
-
-							$new_supply_yes = var['supply_yes'] OTHERWISE 0;
-							$new_supply_no = var['supply_no'] OTHERWISE 0;
-							$new_supply_draw = var['supply_draw'] OTHERWISE 0;
-
-							$target_new_reserve = $get_reserve($new_supply_yes, $new_supply_no, $new_supply_draw);
+							$target_new_reserve = $get_reserve($new_supplies.yes, $new_supplies.no, $new_supplies.draw);
 
 							$new_reserve = var['reserve'] + $gross_reserve_delta;
 
@@ -420,11 +409,11 @@
 							response['next_coef'] = $next_coef;
 							response['fee'] = 0;
 							
-							$new_den = sqrt($new_supply_yes * $new_supply_yes + $new_supply_no * $new_supply_no + $new_supply_draw * $new_supply_draw);
+							$new_den = sqrt($new_supplies.yes * $new_supplies.yes + $new_supplies.no * $new_supplies.no + $new_supplies.draw * $new_supplies.draw);
 							
-							$new_yes_price = $next_coef * ($new_supply_yes / $new_den);
-							$new_no_price = $next_coef * ($new_supply_no / $new_den);
-							$new_draw_price = $next_coef * ($new_supply_draw / $new_den);
+							$new_yes_price = $next_coef * ($new_supplies.yes / $new_den);
+							$new_no_price = $next_coef * ($new_supplies.no / $new_den);
+							$new_draw_price = $next_coef * ($new_supplies.draw / $new_den);
 
 							response['yes_price'] = $new_yes_price;
 							response['no_price'] = $new_no_price;
@@ -489,7 +478,7 @@
 
 					$winner_amount = $result == 'yes' ? $yes_amount : $result == 'no' ? $no_amount : $draw_amount;
 
-					$winner_supply = var['supply_' || $result];
+					$winner_supply =  $supplies[$result];
 
 					require($winner_supply > 0, "BUG winner supply = " || $winner_supply);
 					require($winner_amount > 0, "please send only the winner token");
@@ -512,17 +501,11 @@
 						state: `{
 							response["profit"] = $payout;
 
-							if ($yes_amount > 0) {
-								var['supply_yes'] -= $yes_amount;
-							}
-
-							if ($no_amount > 0) {
-								var['supply_no'] -= $no_amount;
-							}
-
-							if ($allow_draw AND $draw_amount > 0) {
-								var['supply_draw'] -= $draw_amount;
-							}
+							var['supplies'] = {
+								yes: $yes_amount > 0 ? $supplies.yes - $yes_amount : $supplies.yes,
+								no: $no_amount > 0 ? $supplies.no - $no_amount : $supplies.no,
+								draw: $allow_draw AND $draw_amount > 0 ? $supplies.draw - $draw_amount : $supplies.draw
+							};
 
 							var['reserve'] -= $payout;
 						}`

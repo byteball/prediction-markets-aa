@@ -350,9 +350,9 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 		expect(response.bounced).to.be.false;
 
 		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
-		expect(vars1.supply_yes).to.be.equal(yes_amount);
-		expect(vars1.supply_no).to.be.equal(no_amount);
-		expect(vars1.supply_draw).to.be.equal(draw_amount);
+		expect(vars1.supplies.yes).to.be.equal(yes_amount);
+		expect(vars1.supplies.no).to.be.equal(no_amount);
+		expect(vars1.supplies.draw).to.be.equal(draw_amount);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
 		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit })
@@ -457,9 +457,9 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit });
 
-		expect(vars1.supply_yes).to.be.equal(this.supply_yes);
-		expect(vars1.supply_no).to.be.equal(this.supply_no);
-		expect(vars1.supply_draw).to.be.equal(this.supply_draw);
+		expect(vars1.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars1.supplies.no).to.be.equal(this.supply_no);
+		expect(vars1.supplies.draw).to.be.equal(this.supply_draw);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
@@ -504,9 +504,9 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 
 		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
 
-		expect(vars1.supply_yes).to.be.equal(this.supply_yes);
-		expect(vars1.supply_no).to.be.equal(this.supply_no);
-		expect(vars1.supply_draw).to.be.equal(this.supply_draw);
+		expect(vars1.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars1.supplies.no).to.be.equal(this.supply_no);
+		expect(vars1.supplies.draw).to.be.equal(this.supply_draw);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
 		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
@@ -643,7 +643,7 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 		expect(unit).to.be.validUnit;
 
 		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
-		expect(vars.supply_yes).to.be.equal(this.supply_yes);
+		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
 
 		this.check_reserve();
 	});
@@ -675,8 +675,8 @@ describe('Check prediction AA: 2 (draw-asset-no-winner)', function () {
 		expect(response.bounced).to.be.false;
 		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
 
-		expect(vars1.supply_yes).to.be.equal(this.supply_yes);
-		expect(vars1.supply_no).to.be.equal(this.supply_no);
+		expect(vars1.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars1.supplies.no).to.be.equal(this.supply_no);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 		expect(Number(vars1.coef).toFixed(9)).to.be.equal(Number(this.coef).toFixed(9));
 
