@@ -63,6 +63,7 @@
 		$received_outcome_tokens = $ready AND (trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0));
 
 		$end_of_waiting_period = $event_date + $waiting_period_length;
+		$trading_open = timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period;
 
 		$network_fee = ($reserve_asset == 'base') ? 10000 : 0;
 		
@@ -149,7 +150,7 @@
 						bounce("invalid min_expected_amount");
 					}
 
-					if (!(timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period)){
+					if (!$trading_open) {
 						$error = "the trading period is closed";
 						return;
 					}
@@ -290,7 +291,7 @@
 
 					$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
 					
-					if ((timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period) AND !$result) {
+					if ($trading_open AND !$result) {
 
 						if ($supplies.yes + $supplies.no + $supplies.draw == 0) {
 							$yes_amount_ratio = trigger.data.yes_amount_ratio OTHERWISE 0;
