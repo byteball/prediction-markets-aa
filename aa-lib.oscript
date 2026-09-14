@@ -4,6 +4,10 @@
 			require(is_aa($aa), "not an AA");
 		};
 
+		$get_supplies = ($aa) => {
+			var[$aa]['supplies'] OTHERWISE {yes: 0, no: 0, draw: 0}
+		};
+
 		$get_reserve = ($aa, $yes_amount, $no_amount, $draw_amount) => {
 		//	$check_aa($aa);
 
@@ -17,9 +21,7 @@
 		//	$check_aa($aa);
 
 			$params = definition[$aa][1].params;
-			$supply_yes = var[$aa]['supply_yes'] OTHERWISE 0;
-			$supply_no = var[$aa]['supply_no'] OTHERWISE 0;
-			$supply_draw = var[$aa]['supply_draw'] OTHERWISE 0;
+			$supplies = $get_supplies($aa);
 			$allow_draw = $params.allow_draw OTHERWISE false;
 			$current_reserve = var[$aa]['reserve'] OTHERWISE 0;
 			$coef = var[$aa]['coef'] OTHERWISE 1;
@@ -28,9 +30,9 @@
 			$redeem_fee = exists($params.redeem_fee) ? $params.redeem_fee : 0.02;
 			$arb_profit_tax = exists($params.arb_profit_tax) ? $params.arb_profit_tax : 0.9;
 
-			$new_supply_yes = $supply_yes + ($yes_amount ? $yes_amount : 0);
-			$new_supply_no = $supply_no + ($no_amount ? $no_amount : 0);
-			$new_supply_draw = $supply_draw + ($draw_amount ? $draw_amount : 0);
+			$new_supply_yes = $supplies.yes + ($yes_amount ? $yes_amount : 0);
+			$new_supply_no = $supplies.no + ($no_amount ? $no_amount : 0);
+			$new_supply_draw = $supplies.draw + ($draw_amount ? $draw_amount : 0);
 
 			$new_reserve = $get_reserve($aa, $new_supply_yes, $new_supply_no, $new_supply_draw);
 
@@ -47,12 +49,12 @@
 			$new_den = sqrt($new_supply_yes * $new_supply_yes + $new_supply_no * $new_supply_no + $new_supply_draw * $new_supply_draw);
 	
 			// calc arb profit fee
-			if (($supply_yes + $supply_no + $supply_draw) != 0) {
-				$old_den = sqrt($supply_yes*$supply_yes + $supply_no*$supply_no + $supply_draw*$supply_draw);
+			if (($supplies.yes + $supplies.no + $supplies.draw) != 0) {
+				$old_den = sqrt($supplies.yes*$supplies.yes + $supplies.no*$supplies.no + $supplies.draw*$supplies.draw);
 
-				$old_yes_price = $coef * ($supply_yes / $old_den);
-				$old_no_price = $coef * ($supply_no / $old_den);
-				$old_draw_price = $coef * ($supply_draw / $old_den);
+				$old_yes_price = $coef * ($supplies.yes / $old_den);
+				$old_no_price = $coef * ($supplies.no / $old_den);
+				$old_draw_price = $coef * ($supplies.draw / $old_den);
 
 				$new_yes_price = $coef * ($new_supply_yes / $new_den);
 				$new_no_price = $coef * ($new_supply_no / $new_den);
@@ -104,9 +106,7 @@
 
 			$coef = var[$aa]['coef'] OTHERWISE 1;
 
-			$supply_yes = var[$aa]['supply_yes'] OTHERWISE 0;
-			$supply_no = var[$aa]['supply_no'] OTHERWISE 0;
-			$supply_draw = var[$aa]['supply_draw'] OTHERWISE 0;
+			$supplies = $get_supplies($aa);
 
 			$network_fee = ($reserve_asset == 'base' ? 10000 : 0);
 			$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
@@ -119,9 +119,9 @@
 
 			$ratio = ($reserve_without_fee * $reserve_without_fee) / ($coef * $coef);
 			
-			$supply_yes_squared = $supply_yes * $supply_yes;
-			$supply_no_squared = $supply_no * $supply_no;
-			$supply_draw_squared = $supply_draw * $supply_draw;
+			$supply_yes_squared = $supplies.yes * $supplies.yes;
+			$supply_no_squared = $supplies.no * $supplies.no;
+			$supply_draw_squared = $supplies.draw * $supplies.draw;
 
 			if ($type == 'yes') {
 				$prepare_calc = $ratio - $supply_no_squared - $supply_draw_squared;
@@ -131,14 +131,14 @@
 				$prepare_calc = $ratio - $supply_yes_squared - $supply_no_squared;
 			}
 
-			$supply = $type == 'yes' ? $supply_yes : $type == 'no' ? $supply_no : $supply_draw;
+			$supply = $supplies[$type];
 			$amount = floor(sqrt($prepare_calc) - $supply);
 			$new_supply = $supply + $amount;
 
 			$new_supply_squared = $new_supply * $new_supply;
 			$new_den = sqrt(($type == 'yes' ? $new_supply_squared : $supply_yes_squared) + ($type == 'no' ? $new_supply_squared : $supply_no_squared) + ($type == 'draw' ? $new_supply_squared : $supply_draw_squared));
 
-			if (($supply_yes + $supply_no + $supply_draw) != 0) {
+			if (($supplies.yes + $supplies.no + $supplies.draw) != 0) {
 				$old_den = sqrt($supply_yes_squared + $supply_no_squared + $supply_draw_squared);
 				$old_price = $coef * ($supply / $old_den);
 
@@ -172,9 +172,9 @@
 			$supply_by_type_squared = $supply_by_type * $supply_by_type;
 			$den = sqrt(($type == 'yes' ? $supply_by_type_squared : $supply_yes_squared) + ($type == 'no' ? $supply_by_type_squared : $supply_no_squared) + ($type == 'draw' ? $supply_by_type_squared : $supply_draw_squared));
 
-			$yes_price = $next_coef * (($type == 'yes' ? $supply_by_type : $supply_yes) / $den);
-			$no_price = $next_coef * (($type == 'no' ? $supply_by_type : $supply_no) / $den);
-			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $supply_by_type : $supply_draw) / $den) : 0;
+			$yes_price = $next_coef * (($type == 'yes' ? $supply_by_type : $supplies.yes) / $den);
+			$no_price = $next_coef * (($type == 'no' ? $supply_by_type : $supplies.no) / $den);
+			$draw_price = $params.allow_draw ? $next_coef * (($type == 'draw' ? $supply_by_type : $supplies.draw) / $den) : 0;
 
 
 			{	
