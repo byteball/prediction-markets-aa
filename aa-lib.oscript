@@ -131,7 +131,7 @@
 				$prepare_calc = $ratio - $supply_yes_squared - $supply_no_squared;
 			}
 
-			$supply = $type == 'yes' ? $supplies.yes : $type == 'no' ? $supplies.no : $supplies.draw;
+			$supply = $supplies[$type];
 			$amount = floor(sqrt($prepare_calc) - $supply);
 			$new_supply = $supply + $amount;
 

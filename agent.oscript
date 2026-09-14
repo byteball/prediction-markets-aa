@@ -1,7 +1,7 @@
 {
 	doc_url: "https://prophet.ooo/prediction-markets.json",
 	getters: `{
-		$lib_aa_const = "7VZOC2RRO3RQOWBZGAVASNCEF6O5ISWP";
+		$lib_aa_const = "4NWNNEO5BD5EFIFRRLEEK2E6RUYBJIMP";
 
 		$get_reserve = ($yes_amount, $no_amount, $draw_amount) => ($lib_aa_const||'')#2.$get_reserve(this_address, $yes_amount, $no_amount, $draw_amount);
 
