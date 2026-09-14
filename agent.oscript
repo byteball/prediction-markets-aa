@@ -73,6 +73,8 @@
 		
 		$supplies = $get_supplies();
 
+		$sum_by_outcome = ($a, $b) => {yes: $a.yes + $b.yes, no: $a.no + $b.no, draw: $a.draw + $b.draw};
+
 		$to = trigger.data.to OTHERWISE trigger.address;
 
 		if (trigger.data.to AND !is_valid_address(trigger.data.to))
@@ -283,11 +285,7 @@
 
 							response['arb_profit_tax'] = $res.arb_profit_tax;
 
-							var['supplies'] = {
-								yes: $supplies.yes + $yes_amount,
-								no: $supplies.no + $no_amount,
-								draw: $allow_draw ? $supplies.draw + $draw_amount : 0
-							};
+							var['supplies'] = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
 
 							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
 							require($res.new_reserve - $reserve <= $reserve_amount, "reserve grows by more than the added reserve amount");
@@ -383,13 +381,8 @@
 						if: "{!$hasError}",
 						app: 'state',
 						state: `{
-							var['supplies'] = {
-								yes: $supplies.yes + $yes_amount,
-								no: $supplies.no + $no_amount,
-								draw: $allow_draw ? $supplies.draw + $draw_amount : 0
-							};
-
-							$new_supplies = $get_supplies();
+							$new_supplies = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
+							var['supplies'] = $new_supplies;
 
 							$target_new_reserve = $get_reserve($new_supplies.yes, $new_supplies.no, $new_supplies.draw);
 
