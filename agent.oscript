@@ -131,6 +131,7 @@
 						state: `{
 							var[$define_type] = response_unit;
 							response[$define_type] = response_unit;
+							response['event'] = json_stringify({type: 'define', asset_type: $define_type, asset: response_unit});
 						}`
 					},
 				]
@@ -276,7 +277,27 @@
 
 							response['arb_profit_tax'] = $res.arb_profit_tax;
 
-							var['supplies'] = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
+							$new_supplies = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
+							var['supplies'] = $new_supplies;
+
+							response['event'] = json_stringify({
+								type: 'trade',
+								user: trigger.address,
+								to: $to,
+								yes_amount: $yes_amount,
+								no_amount: $no_amount,
+								draw_amount: $draw_amount,
+								reserve_amount: $reserve_amount - $network_fee,
+								payout: $payout OTHERWISE 0,
+								fee: $res.fee,
+								arb_profit_tax: $res.arb_profit_tax,
+								reserve: $res.new_reserve,
+								coef: $res.next_coef,
+								supplies: $new_supplies,
+								yes_price: $res.yes_price,
+								no_price: $res.no_price,
+								draw_price: $res.draw_price
+							});
 
 							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
 							require($res.new_reserve - $reserve <= $reserve_amount, "reserve grows by more than the added reserve amount");
@@ -402,6 +423,22 @@
 							response['yes_price'] = $new_yes_price;
 							response['no_price'] = $new_no_price;
 							response['draw_price'] = $new_draw_price;
+
+							response['event'] = json_stringify({
+								type: 'add_liquidity',
+								user: trigger.address,
+								to: $to,
+								yes_amount: $yes_amount,
+								no_amount: $no_amount,
+								draw_amount: $draw_amount,
+								reserve_amount: $gross_reserve_delta,
+								reserve: $new_reserve,
+								coef: $next_coef,
+								supplies: $new_supplies,
+								yes_price: $new_yes_price,
+								no_price: $new_no_price,
+								draw_price: $new_draw_price
+							});
 						}`
 					},
 				]
@@ -445,6 +482,7 @@
 							var['result'] = $res;
 							response['messages'] = "The result is committed";
 							response['result'] = $res;
+							response['event'] = json_stringify({type: 'commit', user: trigger.address, result: $res, datafeed_value: $current_datafeed_value});
 						}`
 					},
 				]
@@ -485,9 +523,20 @@
 						state: `{
 							response["profit"] = $payout;
 
-							var['supplies'] = $sum_by_outcome($supplies, {yes: -$yes_amount, no: -$no_amount, draw: -$draw_amount});
-
+							$new_supplies = $sum_by_outcome($supplies, {yes: -$yes_amount, no: -$no_amount, draw: -$draw_amount});
+							var['supplies'] = $new_supplies;
 							var['reserve'] -= $payout;
+
+							response['event'] = json_stringify({
+								type: 'claim_profit',
+								user: trigger.address,
+								to: $to,
+								result: $result,
+								amount: $winner_amount,
+								profit: $payout,
+								reserve: $reserve - $payout,
+								supplies: $new_supplies
+							});
 						}`
 					},
 				]
