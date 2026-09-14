@@ -165,19 +165,9 @@
 
 						$res = $lib_aa#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
-						if ($type == 'yes') {
-							$yes_amount = $res.amount;
-							$no_amount = 0;
-							$draw_amount = 0;
-						} else if ($type == 'no') { 
-							$yes_amount = 0;
-							$no_amount = $res.amount;
-							$draw_amount = 0;
-						} else if ($type == 'draw') { 
-							$yes_amount = 0;
-							$no_amount = 0;
-							$draw_amount = $res.amount;
-						}
+						$yes_amount = $type == 'yes' ? $res.amount : 0;
+						$no_amount = $type == 'no' ? $res.amount : 0;
+						$draw_amount = $type == 'draw' ? $res.amount : 0;
 
 						if ($res.amount < $min_expected_amount) {
 							$error = "amount less than minimum";
