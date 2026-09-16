@@ -12,6 +12,10 @@
 		$get_supplies = () => {
 			var['supplies'] OTHERWISE {yes: 0, no: 0, draw: 0}
 		};
+
+		$get_user_balance = ($address) => {
+			var['balance_' || $address] OTHERWISE {yes: 0, no: 0, draw: 0}
+		};
  	}`,
 	init: `{
 		$lib_aa = $lib_aa_const || '';
@@ -71,6 +75,7 @@
 		$type = trigger.data.type OTHERWISE false;
 		
 		$supplies = $get_supplies();
+		$user_balance = $get_user_balance(trigger.address);
 
 		$sum_by_outcome = ($a, $b) => {yes: $a.yes + $b.yes, no: $a.no + $b.no, draw: $a.draw + $b.draw};
 
