@@ -58,11 +58,14 @@
 		// helpers
 		$result = var['result']; // yes/no/draw
 
-		$yes_asset = var['yes_asset'];
-		$no_asset = var['no_asset'];
-		$draw_asset = var['draw_asset'];
+		// amounts by outcome: positive = buy, negative = redeem
+		$amounts_in = {
+			yes: trigger.data.yes_amount OTHERWISE 0,
+			no: trigger.data.no_amount OTHERWISE 0,
+			draw: trigger.data.draw_amount OTHERWISE 0
+		};
 
-		$received_outcome_tokens = trigger.output[[asset=$yes_asset]] > 0 OR trigger.output[[asset=$no_asset]] > 0 OR ($allow_draw AND trigger.output[[asset=$draw_asset]] > 0); // will change it
+		$has_sale = $amounts_in.yes < 0 OR $amounts_in.no < 0 OR $amounts_in.draw < 0;
 
 		$end_of_waiting_period = $event_date + $waiting_period_length;
 		$trading_open = timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period;
@@ -90,12 +93,48 @@
 	}`,
 	messages: {
 		cases: [
+			{ // transfer tokens to another address
+				if: `{trigger.data.transfer}`,
+				init: `{
+					require(trigger.data.to AND $to != trigger.address, "to address is required");
+					require(($reserve_asset == 'base' AND $reserve_amount == $network_fee) OR ($reserve_asset != 'base' AND $reserve_amount == 0), "should not send a reserve");
+
+					require(is_integer($amounts_in.yes) AND $amounts_in.yes >= 0, "invalid yes_amount");
+					require(is_integer($amounts_in.no) AND $amounts_in.no >= 0, "invalid no_amount");
+					require(is_integer($amounts_in.draw) AND $amounts_in.draw >= 0, "invalid draw_amount");
+					require($amounts_in.yes + $amounts_in.no + $amounts_in.draw > 0, "nothing to transfer");
+
+					require($amounts_in.yes <= $user_balance.yes, "not enough yes balance");
+					require($amounts_in.no <= $user_balance.no, "not enough no balance");
+					require($amounts_in.draw <= $user_balance.draw, "not enough draw balance");
+				}`,
+				messages: [
+					{
+						app: 'state',
+						state: `{
+							var['balance_' || trigger.address] = $sum_by_outcome($user_balance, {yes: -$amounts_in.yes, no: -$amounts_in.no, draw: -$amounts_in.draw});
+							var['balance_' || $to] = $sum_by_outcome($get_user_balance($to), $amounts_in);
+
+							response['event'] = json_stringify({
+								type: 'transfer',
+								user: trigger.address,
+								to: $to,
+								yes_amount: $amounts_in.yes,
+								no_amount: $amounts_in.no,
+								draw_amount: $amounts_in.draw,
+								user_balance: $get_user_balance(trigger.address),
+								to_balance: $get_user_balance($to)
+							});
+						}`
+					},
+				]
+			},
 			{ // mint or redeem tokens
-				if: `{!exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (($reserve_amount > $network_fee AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $received_outcome_tokens)}`,
+				if: `{!exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (($reserve_amount > $network_fee AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $has_sale)}`,
 				init: `{
 					require($allow_draw OR !exists(trigger.data.draw_amount), "draw asset does not exist");
 
-					if ((trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR $received_outcome_tokens) AND trigger.data.type) {
+					if ((trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount) AND trigger.data.type) {
 						bounce("both type and amount");
 					}
 					
@@ -121,9 +160,11 @@
 
 						$res = $lib_aa#11.$get_result_for_buying_by_type(this_address, $type, $reserve_amount);
 
-						$yes_amount = $type == 'yes' ? $res.amount : 0;
-						$no_amount = $type == 'no' ? $res.amount : 0;
-						$draw_amount = $type == 'draw' ? $res.amount : 0;
+						$amounts = {
+							yes: $type == 'yes' ? $res.amount : 0,
+							no: $type == 'no' ? $res.amount : 0,
+							draw: $type == 'draw' ? $res.amount : 0
+						};
 
 						if ($res.amount < $min_expected_amount) {
 							$error = "amount less than minimum";
@@ -131,25 +172,18 @@
 						}
 
 					} else {
-						$yes_amount = trigger.data.yes_amount OTHERWISE -trigger.output[[asset=$yes_asset]];
-						$no_amount = trigger.data.no_amount OTHERWISE -trigger.output[[asset=$no_asset]];
-						$draw_amount = $allow_draw ? trigger.data.draw_amount OTHERWISE -trigger.output[[asset=$draw_asset]] : 0;
+						// positive = buy, negative = sell from the sender's balance
+						$amounts = $amounts_in;
 
-						if (trigger.data.yes_amount AND (!is_integer(trigger.data.yes_amount) OR trigger.data.yes_amount <= 0))
-							bounce("invalid yes_amount");
-						if (trigger.data.no_amount AND (!is_integer(trigger.data.no_amount) OR trigger.data.no_amount <= 0))
-							bounce("invalid no_amount");
-						if ($allow_draw AND trigger.data.draw_amount AND (!is_integer(trigger.data.draw_amount) OR trigger.data.draw_amount <= 0))
-							bounce("invalid draw_amount");
+						require(is_integer($amounts.yes), "invalid yes_amount");
+						require(is_integer($amounts.no), "invalid no_amount");
+						require(is_integer($amounts.draw), "invalid draw_amount");
 
-						if (trigger.data.yes_amount AND trigger.output[[asset=$yes_asset]] > 0)
-							bounce("both yes_amount param and amount");
-						if (trigger.data.no_amount AND trigger.output[[asset=$no_asset]] > 0)
-							bounce("both no_amount param and amount");
-						if ($allow_draw AND trigger.data.draw_amount AND trigger.output[[asset=$draw_asset]] > 0)
-							bounce("both draw_amount param and amount");
+						require(-$amounts.yes <= $user_balance.yes, "not enough yes balance");
+						require(-$amounts.no <= $user_balance.no, "not enough no balance");
+						require(-$amounts.draw <= $user_balance.draw, "not enough draw balance");
 
-						$res = $lib_aa#11.$get_exchange_result(this_address, $yes_amount, $no_amount, $draw_amount);	
+						$res = $lib_aa#11.$get_exchange_result(this_address, $amounts.yes, $amounts.no, $amounts.draw);
 						$payout = floor($res.gross_payout + $reserve_amount - $res.reserve_needed - $res.fee - $network_fee);
 
 						if ($payout < 0) {
@@ -160,36 +194,6 @@
 
 				}`,
 				messages: [
-					{
-						if: "{$yes_amount AND $yes_amount > 0 AND !$error}",
-						app: 'payment',
-						payload: {
-							asset: `{$yes_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$yes_amount}"}
-							]
-						}
-					},
-					{
-						if: "{$no_amount AND $no_amount > 0 AND !$error}",
-						app: 'payment',
-						payload: {
-							asset: `{$no_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$no_amount}"}
-							]
-						}
-					},
-					{
-						if: "{$allow_draw AND $draw_amount AND $draw_amount > 0 AND !$error}",
-						app: 'payment',
-						payload: {
-							asset: `{$draw_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$draw_amount}"}
-							]
-						}
-					},				
 					{ // return the change (if any) or pay out the redeemed reserve
 						if: "{($payout AND $payout > 0) OR $error}",
 						app: 'payment',
@@ -204,8 +208,8 @@
 						app: 'state',
 						state: `{
 							if ($error) {
-								// soft bounce returns the reserve asset only
-								if ($received_outcome_tokens)
+								// a sale has nothing to refund, hard bounce; a purchase gets its reserve back by the payment above
+								if ($has_sale)
 									bounce($error);
 								response['error'] = $error;
 								return;
@@ -214,9 +218,9 @@
 							response['next_reserve'] = $res.new_reserve  OTHERWISE 0;
 							response['next_coef'] = $res.next_coef OTHERWISE 1;
 
-							response['yes_amount'] = $yes_amount OTHERWISE 0;
-							response['no_amount'] = $no_amount OTHERWISE 0;
-							response['draw_amount'] = $draw_amount OTHERWISE 0;
+							response['yes_amount'] = $amounts.yes;
+							response['no_amount'] = $amounts.no;
+							response['draw_amount'] = $amounts.draw;
 
 							response['yes_price'] = $res.yes_price;
 							response['no_price'] = $res.no_price;
@@ -231,16 +235,20 @@
 
 							response['arb_profit_tax'] = $res.arb_profit_tax;
 
-							$new_supplies = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
+							$new_supplies = $sum_by_outcome($supplies, $amounts);
 							var['supplies'] = $new_supplies;
+
+							// sold tokens are debited from the sender, bought tokens are credited to $to
+							var['balance_' || trigger.address] = $sum_by_outcome($user_balance, {yes: min($amounts.yes, 0), no: min($amounts.no, 0), draw: min($amounts.draw, 0)});
+							var['balance_' || $to] = $sum_by_outcome($get_user_balance($to), {yes: max($amounts.yes, 0), no: max($amounts.no, 0), draw: max($amounts.draw, 0)}); // if $to == trigger.address, reads the value written just above
 
 							response['event'] = json_stringify({
 								type: 'trade',
 								user: trigger.address,
 								to: $to,
-								yes_amount: $yes_amount,
-								no_amount: $no_amount,
-								draw_amount: $draw_amount,
+								yes_amount: $amounts.yes,
+								no_amount: $amounts.no,
+								draw_amount: $amounts.draw,
 								reserve_amount: $reserve_amount - $network_fee,
 								payout: $payout OTHERWISE 0,
 								fee: $res.fee,
@@ -250,7 +258,9 @@
 								supplies: $new_supplies,
 								yes_price: $res.yes_price,
 								no_price: $res.no_price,
-								draw_price: $res.draw_price
+								draw_price: $res.draw_price,
+								user_balance: $get_user_balance(trigger.address),
+								to_balance: trigger.data.to ? $get_user_balance($to) : false
 							});
 
 							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
@@ -262,7 +272,7 @@
 			{ // add liquidity
 				if: `{trigger.data.add_liquidity AND $reserve_amount > $network_fee}`,
 				init: `{
-					require(!$received_outcome_tokens, "outcome tokens are not accepted when adding liquidity");
+					require(!$has_sale, "negative amounts are not accepted when adding liquidity");
 
 					$gross_reserve_delta = $reserve_amount - $network_fee; // gross, because it includes the fee and tax
 					
@@ -287,52 +297,26 @@
 
 							require($yes_amount_ratio >= 0 AND $no_amount_ratio >= 0 AND $yes_amount_ratio + $no_amount_ratio + $draw_amount_ratio == 1, 'yes_amount_ratio + no_amount_ratio + draw_amount_ratio must be equal 1');
 
-							$yes_amount = floor($gross_reserve_delta * sqrt($yes_amount_ratio));
-							$no_amount = floor($gross_reserve_delta * sqrt($no_amount_ratio));
-							$draw_amount = $allow_draw ? floor($gross_reserve_delta * sqrt($draw_amount_ratio)) : 0;
+							$amounts = {
+								yes: floor($gross_reserve_delta * sqrt($yes_amount_ratio)),
+								no: floor($gross_reserve_delta * sqrt($no_amount_ratio)),
+								draw: $allow_draw ? floor($gross_reserve_delta * sqrt($draw_amount_ratio)) : 0
+							};
 
 						} else {
 							$ratio = ($gross_reserve_delta + $reserve) / $reserve;
 
-							$yes_amount = floor($ratio * $supplies.yes - $supplies.yes);
-							$no_amount = floor($ratio * $supplies.no - $supplies.no);
-							$draw_amount = floor($ratio * $supplies.draw - $supplies.draw);
+							$amounts = {
+								yes: floor($ratio * $supplies.yes - $supplies.yes),
+								no: floor($ratio * $supplies.no - $supplies.no),
+								draw: floor($ratio * $supplies.draw - $supplies.draw)
+							};
 						}
 					} else {
 						$hasError = true;
 					}
 				}`,
 				messages: [
-					{
-						if: "{!$hasError AND $yes_amount > 0}",
-						app: 'payment',
-						payload: {
-							asset: `{$yes_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$yes_amount}"}
-							]
-						}
-					},
-					{
-						if: "{!$hasError AND $no_amount > 0}",
-						app: 'payment',
-						payload: {
-							asset: `{$no_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$no_amount}"}
-							]
-						}
-					},
-					{
-						if: "{!$hasError AND $allow_draw AND $draw_amount > 0}",
-						app: 'payment',
-						payload: {
-							asset: `{$draw_asset}`,
-							outputs: [
-								{address: "{$to}", amount: "{$draw_amount}"}
-							]
-						}
-					},
 					{
 						if: "{$hasError}",
 						app: 'payment',
@@ -347,8 +331,9 @@
 						if: "{!$hasError}",
 						app: 'state',
 						state: `{
-							$new_supplies = $sum_by_outcome($supplies, {yes: $yes_amount, no: $no_amount, draw: $draw_amount});
+							$new_supplies = $sum_by_outcome($supplies, $amounts);
 							var['supplies'] = $new_supplies;
+							var['balance_' || $to] = $sum_by_outcome($get_user_balance($to), $amounts);
 
 							$target_new_reserve = $get_reserve($new_supplies.yes, $new_supplies.no, $new_supplies.draw);
 
@@ -360,9 +345,9 @@
 							var['reserve'] += $gross_reserve_delta;
 
 							// for stats
-							response['yes_amount'] = $yes_amount OTHERWISE 0;
-							response['no_amount'] = $no_amount OTHERWISE 0;
-							response['draw_amount'] = $draw_amount OTHERWISE 0;
+							response['yes_amount'] = $amounts.yes;
+							response['no_amount'] = $amounts.no;
+							response['draw_amount'] = $amounts.draw;
 
 							response['next_reserve'] = var['reserve'];
 							response['next_coef'] = $next_coef;
@@ -382,16 +367,17 @@
 								type: 'add_liquidity',
 								user: trigger.address,
 								to: $to,
-								yes_amount: $yes_amount,
-								no_amount: $no_amount,
-								draw_amount: $draw_amount,
+								yes_amount: $amounts.yes,
+								no_amount: $amounts.no,
+								draw_amount: $amounts.draw,
 								reserve_amount: $gross_reserve_delta,
 								reserve: $new_reserve,
 								coef: $next_coef,
 								supplies: $new_supplies,
 								yes_price: $new_yes_price,
 								no_price: $new_no_price,
-								draw_price: $new_draw_price
+								draw_price: $new_draw_price,
+								to_balance: trigger.data.to ? $get_user_balance($to) : false
 							});
 						}`
 					},
@@ -444,20 +430,16 @@
 			{ // claim profit
 				if: `{trigger.data.claim_profit}`,
 				init: `{
-					$yes_amount = trigger.output[[asset=$yes_asset]];
-					$no_amount = trigger.output[[asset=$no_asset]];
-					$draw_amount = $allow_draw ? trigger.output[[asset=$draw_asset]] : 0;
-
 					require(($reserve_asset == 'base' AND $reserve_amount == $network_fee) OR ($reserve_asset != 'base' AND $reserve_amount == 0), "should not send a reserve");
 
 					require($result, "no results yet");
 
-					$winner_amount = $result == 'yes' ? $yes_amount : $result == 'no' ? $no_amount : $draw_amount;
+					$winner_amount = $user_balance[$result];
 
 					$winner_supply =  $supplies[$result];
 
 					require($winner_supply > 0, "BUG winner supply = " || $winner_supply);
-					require($winner_amount > 0, "please send only the winner token");
+					require($winner_amount > 0, "no winning tokens on the balance");
 
 					$payout = floor($winner_amount / $winner_supply * $reserve);
 				}`,
@@ -477,9 +459,12 @@
 						state: `{
 							response["profit"] = $payout;
 
-							$new_supplies = $sum_by_outcome($supplies, {yes: -$yes_amount, no: -$no_amount, draw: -$draw_amount});
-							var['supplies'] = $new_supplies;
+							$supplies[$result] = $supplies[$result] - $winner_amount;
+							$user_balance[$result] = 0;
+
+							var['supplies'] = $supplies;
 							var['reserve'] -= $payout;
+							var['balance_' || trigger.address] = $user_balance;
 
 							response['event'] = json_stringify({
 								type: 'claim_profit',
@@ -489,7 +474,8 @@
 								amount: $winner_amount,
 								profit: $payout,
 								reserve: $reserve - $payout,
-								supplies: $new_supplies
+								supplies: $supplies,
+								user_balance: $user_balance
 							});
 						}`
 					},
