@@ -6,14 +6,14 @@ const Decimal = require('decimal.js');
 const path = require('path');
 const moment = require('moment');
 
-describe('Check prediction AA: 1 (base)', function () {
+describe('Check tokenless prediction AA: 1 (base)', function () {
 	this.timeout(120000)
 	const { abs, sqrt, ceil, floor } = Math;
 
 	before(async () => {
 		this.network = await Network.create()
 			.with.agent({ aaLib: path.join(__dirname, "../aa-lib.oscript") })
-			.with.agent({ predictionBaseAgent: path.join(__dirname, "../agent.oscript") })
+			.with.agent({ predictionBaseAgent: path.join(__dirname, "../agent-tokenless.oscript") })
 			.with.agent({ predictionFactoryAgent: path.join(__dirname, "../factory.oscript") })
 			.with.asset({ reserveAsset: {} })
 			.with.wallet({ alice: { base: 50e9, reserveAsset: 50e9 } })
@@ -285,7 +285,8 @@ describe('Check prediction AA: 1 (base)', function () {
 				reserve_asset: this.reserve_asset,
 				arb_profit_tax: this.arb_profit_tax,
 				issue_fee: this.issue_fee,
-				redeem_fee: this.redeem_fee
+				redeem_fee: this.redeem_fee,
+				is_tokenless: true
 			}
 		});
 
@@ -303,23 +304,24 @@ describe('Check prediction AA: 1 (base)', function () {
 		const { vars: vars1 } = await this.bob.readAAStateVars(this.prediction_address);
 		const { vars: vars2 } = await this.bob.readAAStateVars(this.network.agent.predictionFactoryAgent);
 
-		expect(vars1.yes_asset).to.exist;
-		expect(vars1.no_asset).to.exist;
-		expect(vars1.draw_asset).to.not.exist;
 
 		const params = vars2[`prediction_${this.prediction_address}`];
 
-		expect(params.yes_asset).to.exist;
+		expect(params.yes_asset).to.not.exist;
 		expect(params.creator).to.be.equals(this.aliceAddress);
 		expect(params.created_at).to.exist;
-		expect(params.no_asset).to.exist;
+		expect(params.no_asset).to.not.exist;
 		expect(params.draw_asset).to.not.exist;
+		expect(params.is_tokenless).to.be.true;
 
-		expect(params.yes_asset).to.be.equal(vars1.yes_asset);
-		expect(params.no_asset).to.be.equal(vars1.no_asset);
+		// the market is deployed from the tokenless base AA and the factory does not fund asset definition
+		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit });
+		const definition = unitObj.messages.find(m => m.app === 'definition').payload.definition;
 
-		this.yes_asset = vars1.yes_asset;
-		this.no_asset = vars1.no_asset;
+		expect(definition[1].base_aa).to.be.equal(this.network.agent.predictionBaseAgent);
+		expect(definition[1].params.is_tokenless).to.be.true;
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equal([]);
+		expect(vars1).to.deep.equal({});
 	});
 
 	it('Alice issue draw tokens (no exists)', async () => {
@@ -384,15 +386,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.supplies.no).to.be.equal(this.supply_no);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
-		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
-
-		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				address: this.bobAddress,
-				asset: this.yes_asset,
-				amount: res.amount,
-			}
-		]);
+		expect(vars1[`balance_${this.bobAddress}`].yes).to.be.equal(res.amount);
 
 		this.bob_yes_amount += res.amount;
 		this.check_reserve();
@@ -439,7 +433,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.check_reserve();
 	});
 
-	it('Alice issue tokens', async () => {
+	it('Alice buys tokens', async () => {
 		const yes_amount = 0.5 * 1e9;
 		const no_amount = 0.5 * 1e9;
 
@@ -471,20 +465,13 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.supplies.yes).to.be.equal(this.supply_yes);
 		expect(vars1.supplies.no).to.be.equal(this.supply_no);
 		expect(vars1.reserve).to.be.equal(this.reserve);
+		
+		expect(vars1[`balance_${this.aliceAddress}`].yes).to.be.equal(yes_amount);
+		expect(vars1[`balance_${this.aliceAddress}`].no).to.be.equal(no_amount);
 
 		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit })
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				address: this.aliceAddress,
-				asset: this.yes_asset,
-				amount: yes_amount,
-			},
-			{
-				address: this.aliceAddress,
-				asset: this.no_asset,
-				amount: no_amount,
-			},
 			{
 				address: this.aliceAddress,
 				amount: amount - res.reserve_needed - res.fee
@@ -541,9 +528,13 @@ describe('Check prediction AA: 1 (base)', function () {
 		const res = this.buy(-yes_amount_redeem, 0, 0);
 
 		const { unit, error } = await this.alice.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: yes_amount_redeem }],
+			messages: [{
+				app: 'data',
+				payload: {
+					yes_amount: -yes_amount_redeem,
+				}
+			}]
 		});
 
 		expect(error).to.be.null
@@ -561,6 +552,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.supplies.yes).to.be.equal(this.supply_yes);
 		expect(vars1.supplies.no).to.be.equal(this.supply_no);
 		expect(vars1.reserve).to.be.equal(this.reserve);
+		expect(vars1[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
 			{
@@ -572,28 +564,68 @@ describe('Check prediction AA: 1 (base)', function () {
 		this.check_reserve();
 	});
 
-	it('Alice redeems yes tokens and buys no tokens with not enough reserve (bounced, tokens returned)', async () => {
+	it('Alice sells more yes tokens than she has (bounced)', async () => {
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e4,
+			data: {
+				yes_amount: -(this.alice_yes_amount + 1)
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("not enough yes balance");
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+
+		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars.reserve).to.be.equal(this.reserve);
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
+	});
+
+	it('Alice sends type together with amount (bounced)', async () => {
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e6 + 1e4,
+			data: {
+				type: 'yes',
+				no_amount: -1000
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("both type and amount");
+	});
+
+	it('Alice sells yes tokens and buys no tokens with not enough reserve (bounced)', async () => {
 		const yes_amount_redeem = 0.01e9;
 		const no_amount = 1e9;
 		const change = 1e6; // much less than needed
 
 		const res = this.buy(-yes_amount_redeem, no_amount, 0, true);
-
 		const { unit, error } = await this.alice.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: change + 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: yes_amount_redeem }],
 			messages: [{
 				app: 'data',
 				payload: {
-					no_amount
+					no_amount,
+					yes_amount: -yes_amount_redeem
 				}
 			}]
 		});
 
 		expect(error).to.be.null
 		expect(unit).to.be.validUnit
-
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
 
 		expect(response.bounced).to.be.true;
@@ -605,11 +637,6 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
 			{
-				asset: this.yes_asset,
-				address: this.aliceAddress,
-				amount: yes_amount_redeem
-			},
-			{
 				address: this.aliceAddress,
 				amount: change
 			},
@@ -620,9 +647,11 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
 		expect(vars.supplies.no).to.be.equal(this.supply_no);
 		expect(vars.reserve).to.be.equal(this.reserve);
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
+		expect(vars[`balance_${this.aliceAddress}`].no).to.be.equal(this.alice_no_amount);
 	});
 
-	it('Bob issue tokens', async () => {
+	it('Bob buys tokens', async () => {
 		const yes_amount = 2432250;
 		const no_amount = 142350;
 
@@ -655,17 +684,10 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
 
+		expect(vars1[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount + yes_amount);
+		expect(vars1[`balance_${this.bobAddress}`].no).to.be.equal(this.bob_no_amount + no_amount);
+
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				address: this.bobAddress,
-				asset: this.yes_asset,
-				amount: yes_amount,
-			},
-			{
-				address: this.bobAddress,
-				asset: this.no_asset,
-				amount: no_amount,
-			},
 			{
 				address: this.bobAddress,
 				amount: amount - res.reserve_needed - res.fee,
@@ -686,7 +708,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
 	});
 
-	it('Bob issues tokens by type (no)', async () => {
+	it('Bob buys tokens by type (no)', async () => {
 		const amount = 5e9;
 		const res = this.get_result_for_buying_by_type('no', amount);
 
@@ -714,15 +736,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.supplies.no).to.be.equal(this.supply_no);
 		expect(vars1.reserve).to.be.equal(this.reserve);
 
-		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
-
-		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				address: this.bobAddress,
-				asset: this.no_asset,
-				amount: res.amount,
-			}
-		]);
+		expect(vars1[`balance_${this.bobAddress}`].no).to.be.equal(this.bob_no_amount + res.amount);
 
 		this.bob_no_amount += res.amount;
 
@@ -735,6 +749,180 @@ describe('Check prediction AA: 1 (base)', function () {
 	
 		expect(Number(responseVars.yes_price).toFixed(9)).to.be.equal(yes_price.toFixed(9));
 		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
+	});
+
+	it('Alice buys yes tokens for Bob (to)', async () => {
+		const yes_amount = 1e6;
+		const amount = 1e8;
+
+		const res = this.buy(yes_amount, 0, 0);
+
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: amount + 1e4,
+			data: {
+				yes_amount,
+				to: this.bobAddress
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+		await this.network.witnessUntilStable(response.response_unit);
+
+		expect(response.bounced).to.be.false;
+
+		this.bob_yes_amount += yes_amount;
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+
+		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars.reserve).to.be.equal(this.reserve);
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
+		expect(vars[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount);
+
+		// the change goes to Bob as well
+		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit });
+		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
+			{
+				address: this.bobAddress,
+				amount: amount - res.reserve_needed - res.fee
+			},
+		]);
+
+		const event = JSON.parse(response.response.responseVars.event);
+		expect(event.type).to.be.equal('trade');
+		expect(event.user).to.be.equal(this.aliceAddress);
+		expect(event.to).to.be.equal(this.bobAddress);
+		expect(event.yes_amount).to.be.equal(yes_amount);
+		expect(event.user_balance.yes).to.be.equal(this.alice_yes_amount);
+		expect(event.to_balance.yes).to.be.equal(this.bob_yes_amount);
+
+		this.check_reserve();
+	});
+
+	it('Alice transfers yes tokens to Bob', async () => {
+		const yes_amount = 2e6;
+
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e4,
+			data: {
+				transfer: 1,
+				to: this.bobAddress,
+				yes_amount
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.false;
+
+		this.alice_yes_amount -= yes_amount;
+		this.bob_yes_amount += yes_amount;
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+
+		// supplies and reserve are untouched, only balances move
+		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
+		expect(vars.supplies.no).to.be.equal(this.supply_no);
+		expect(vars.reserve).to.be.equal(this.reserve);
+
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
+		expect(vars[`balance_${this.aliceAddress}`].no).to.be.equal(this.alice_no_amount);
+		expect(vars[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount);
+		expect(vars[`balance_${this.bobAddress}`].no).to.be.equal(this.bob_no_amount);
+
+		// state-only response: no payments and no response unit, the bytes sent with the trigger stay on the AA
+		expect(response.response_unit).to.be.null;
+
+		const event = JSON.parse(response.response.responseVars.event);
+		expect(event.type).to.be.equal('transfer');
+		expect(event.user).to.be.equal(this.aliceAddress);
+		expect(event.to).to.be.equal(this.bobAddress);
+		expect(event.yes_amount).to.be.equal(yes_amount);
+		expect(event.no_amount).to.be.equal(0);
+		expect(event.draw_amount).to.be.equal(0);
+		expect(event.user_balance.yes).to.be.equal(this.alice_yes_amount);
+		expect(event.to_balance.yes).to.be.equal(this.bob_yes_amount);
+	});
+
+	it('Alice transfers more than she has (bounced)', async () => {
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e4,
+			data: {
+				transfer: 1,
+				to: this.bobAddress,
+				no_amount: this.alice_no_amount + 1
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("not enough no balance");
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+		expect(vars[`balance_${this.aliceAddress}`].no).to.be.equal(this.alice_no_amount);
+		expect(vars[`balance_${this.bobAddress}`].no).to.be.equal(this.bob_no_amount);
+	});
+
+	it('Alice transfers without to / to herself / nothing / negative (bounced)', async () => {
+		const cases = [
+			[{ transfer: 1, yes_amount: 1000 }, "to address is required"],
+			[{ transfer: 1, to: this.aliceAddress, yes_amount: 1000 }, "to address is required"],
+			[{ transfer: 1, to: this.bobAddress }, "nothing to transfer"],
+			[{ transfer: 1, to: this.bobAddress, yes_amount: -1000 }, "invalid yes_amount"],
+		];
+
+		for (const [data, message] of cases) {
+			const { unit, error } = await this.alice.triggerAaWithData({
+				toAddress: this.prediction_address,
+				amount: 1e4,
+				data
+			});
+
+			expect(error).to.be.null;
+			expect(unit).to.be.validUnit;
+
+			const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+			expect(response.bounced).to.be.true;
+			expect(response.response.error.message).to.be.equal(message);
+		}
+
+		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
+		expect(vars[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount);
+	});
+
+	it('Alice transfers with a reserve attached (bounced)', async () => {
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e4 + 1000,
+			data: {
+				transfer: 1,
+				to: this.bobAddress,
+				yes_amount: 1000
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("should not send a reserve");
 	});
 
 	it('Bob add liquidity', async () => {
@@ -767,20 +955,8 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars1.reserve).to.be.equal(this.reserve);
 		expect(Number(vars1.coef).toFixed(9)).to.be.equal(Number(this.coef).toFixed(9));
 
-		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit })
-
-		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				address: this.bobAddress,
-				asset: this.yes_asset,
-				amount: yes_amount,
-			},
-			{
-				address: this.bobAddress,
-				asset: this.no_asset,
-				amount: no_amount,
-			},
-		]);
+		expect(vars1[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount + yes_amount);
+		expect(vars1[`balance_${this.bobAddress}`].no).to.be.equal(this.bob_no_amount + no_amount);
 
 		this.bob_no_amount += no_amount;
 		this.bob_yes_amount += yes_amount;
@@ -796,18 +972,17 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(Number(responseVars.no_price).toFixed(9)).to.be.equal(no_price.toFixed(9));
 	});
 
-	it('Bob adds liquidity and sends outcome tokens (bounced, tokens returned)', async () => {
+	it('Bob adds liquidity with a negative amount (bounced)', async () => {
 		const yes_amount = 1e6;
 		const amount = 1e9;
 
 		const { unit, error } = await this.bob.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: amount + 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: yes_amount }],
 			messages: [{
 				app: 'data',
 				payload: {
-					add_liquidity: 1
+					add_liquidity: 1,
+					yes_amount: -yes_amount
 				}
 			}]
 		});
@@ -818,18 +993,13 @@ describe('Check prediction AA: 1 (base)', function () {
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
 		expect(response.bounced).to.be.true;
-		expect(response.response.error.message).to.be.equal("outcome tokens are not accepted when adding liquidity");
+		expect(response.response.error.message).to.be.equal("negative amounts are not accepted when adding liquidity");
 
 		await this.network.witnessUntilStable(response.response_unit);
 
 		const { unitObj } = await this.bob.getUnitInfo({ unit: response.response_unit });
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				asset: this.yes_asset,
-				address: this.bobAddress,
-				amount: yes_amount
-			},
 			{
 				address: this.bobAddress,
 				amount: amount
@@ -841,9 +1011,11 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
 		expect(vars.supplies.no).to.be.equal(this.supply_no);
 		expect(vars.reserve).to.be.equal(this.reserve);
+
+		expect(vars[`balance_${this.bobAddress}`].yes).to.be.equal(this.bob_yes_amount);
 	});
 
-	it('Bob issues tokens after the period expires', async () => {
+	it('Bob buys tokens after the period expires', async () => {
 		const { error } = await this.network.timetravel({ shift: (this.event_date - this.current_timestamp + 100) * 1000 });
 		expect(error).to.be.null;
 
@@ -883,14 +1055,18 @@ describe('Check prediction AA: 1 (base)', function () {
 		]);
 	});
 
-	it('Alice redeems yes tokens after the period expires (bounced, tokens returned)', async () => {
+	it('Alice sells yes tokens after the period expires (bounced)', async () => {
 		const yes_amount_redeem = 1e6;
 		const change = 1000;
 
 		const { unit, error } = await this.alice.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: change + 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: yes_amount_redeem }],
+			messages: [{
+				app: 'data',
+				payload: {
+					yes_amount: -yes_amount_redeem
+				}
+			}]
 		});
 
 		expect(error).to.be.null
@@ -907,11 +1083,6 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
 			{
-				asset: this.yes_asset,
-				address: this.aliceAddress,
-				amount: yes_amount_redeem
-			},
-			{
 				address: this.aliceAddress,
 				amount: change
 			},
@@ -921,6 +1092,8 @@ describe('Check prediction AA: 1 (base)', function () {
 
 		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
 		expect(vars.reserve).to.be.equal(this.reserve);
+
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(this.alice_yes_amount);
 	});
 
 	it('Bob add liquidity after the period expires', async () => {
@@ -980,9 +1153,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 	it('Alice claim profit (no result)', async () => {
 		const { unit, error } = await this.alice.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: this.alice_yes_amount }],
 			messages: [{
 				app: 'data',
 				payload: {
@@ -1040,9 +1211,7 @@ describe('Check prediction AA: 1 (base)', function () {
 
 	it('Alice claim profit', async () => {
 		const { unit, error } = await this.alice.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: this.alice_yes_amount }],
 			messages: [{
 				app: 'data',
 				payload: {
@@ -1075,13 +1244,37 @@ describe('Check prediction AA: 1 (base)', function () {
 		expect(vars.supplies.yes).to.be.equal(this.supply_yes);
 
 		this.reserve -= expect_payout;
+
+		expect(this.reserve).to.be.equal(vars.reserve);
+
+		expect(vars[`balance_${this.aliceAddress}`].yes).to.be.equal(0);
+
+		// only the winning tokens are burned, the losing ones stay
+		expect(vars[`balance_${this.aliceAddress}`].no).to.be.equal(this.alice_no_amount);
+		expect(vars.supplies.no).to.be.equal(this.supply_no);
+	});
+
+	it('Alice claims profit again (no winning tokens)', async () => {
+		const { unit, error } = await this.alice.triggerAaWithData({
+			toAddress: this.prediction_address,
+			amount: 1e4,
+			data: {
+				claim_profit: 1
+			}
+		});
+
+		expect(error).to.be.null;
+		expect(unit).to.be.validUnit;
+
+		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
+
+		expect(response.bounced).to.be.true;
+		expect(response.response.error.message).to.be.equal("no winning tokens on the balance");
 	});
 
 	it('Bob claim profit', async () => {
 		const { unit, error } = await this.bob.sendMulti({
-			asset: this.yes_asset,
 			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: this.bob_yes_amount }],
 			messages: [{
 				app: 'data',
 				payload: {
@@ -1113,61 +1306,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		const { vars } = await this.bob.readAAStateVars(this.prediction_address);
 		expect(vars.supplies.yes).to.be.equal(0);
 		expect(vars.reserve).to.be.equal(0);
-	});
-
-	it('Alice send lose token (and all profits have been paid)', async () => {
-		const { unit } = await this.alice.sendMulti({
-			asset: this.no_asset,
-			base_outputs: [{ address: this.prediction_address, amount: 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: this.alice_no_amount }],
-			messages: [{
-				app: 'data',
-				payload: {
-					claim_profit: 1
-				}
-			}]
-		});
-
-		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
-		expect(response.bounced).to.be.true;
-		expect(response.response.error.message).to.be.equal("BUG winner supply = 0")
-	});
-
-	it('Alice sends the losing tokens after the result is committed (bounced, tokens returned)', async () => {
-		const { error: errorTravel } = await this.network.timetravel({ shift: (this.waiting_period_length + 100) * 1000 });
-		expect(errorTravel).to.be.null;
-
-		const change = 1000;
-
-		const { unit, error } = await this.alice.sendMulti({
-			asset: this.no_asset,
-			base_outputs: [{ address: this.prediction_address, amount: change + 1e4 }],
-			asset_outputs: [{ address: this.prediction_address, amount: this.alice_no_amount }],
-		});
-
-		expect(error).to.be.null
-		expect(unit).to.be.validUnit
-
-		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
-
-		expect(response.bounced).to.be.true;
-		expect(response.response.error.message).to.be.equal("result already exists");
-
-		await this.network.witnessUntilStable(response.response_unit);
-
-		const { unitObj } = await this.alice.getUnitInfo({ unit: response.response_unit });
-
-		expect(Utils.getExternalPayments(unitObj)).to.deep.equalInAnyOrder([
-			{
-				asset: this.no_asset,
-				address: this.aliceAddress,
-				amount: this.alice_no_amount
-			},
-			{
-				address: this.aliceAddress,
-				amount: change
-			},
-		]);
+		expect(vars[`balance_${this.bobAddress}`].yes).to.be.equal(0);
 	});
 
 	it('Bob issues tokens with the reserve only after the result is committed (soft bounce, reserve returned)', async () => {
@@ -1192,7 +1331,7 @@ describe('Check prediction AA: 1 (base)', function () {
 		const { response } = await this.network.getAaResponseToUnitOnNode(this.bob, unit);
 
 		expect(response.bounced).to.be.false;
-		expect(response.response.responseVars.error).to.equal("result already exists");
+		expect(response.response.responseVars.error).to.equal("the trading period is closed");
 
 		await this.network.witnessUntilStable(response.response_unit);
 
