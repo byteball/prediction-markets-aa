@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "mocha --opts test/mocha.opts --require test/bootload.js",
+    "test": "mocha --opts test/mocha.opts --require test/bootload.js test/*.test.oscript.js",
     "test:all": "mocha --opts test/mocha.opts --require test/bootload.js test/*.test.oscript.js",
+    "test:token": "mocha --opts test/mocha.opts --require test/bootload.js test/base.test.oscript.js test/draw-*.test.oscript.js",
+    "test:tokenless": "mocha --opts test/mocha.opts --require test/bootload.js test/tokenless-*.test.oscript.js",
+    "test:factory": "mocha --opts test/mocha.opts --require test/bootload.js test/factory.test.oscript.js",
     "lint": "node ./node_modules/.bin/eslint --ext .js --max-warnings=0 test"
   },
   "engines": {
