@@ -1,5 +1,5 @@
 {
-	doc_url: "https://prophet.ooo/prediction-markets.json",
+	doc_url: "https://prophet.ooo/prediction-markets-tokenless.json",
 	getters: `{
 		$lib_aa_const = "4NWNNEO5BD5EFIFRRLEEK2E6RUYBJIMP";
 
