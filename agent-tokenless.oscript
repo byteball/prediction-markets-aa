@@ -93,42 +93,6 @@
 	}`,
 	messages: {
 		cases: [
-			{ // transfer tokens to another address
-				if: `{trigger.data.transfer}`,
-				init: `{
-					require(trigger.data.to AND $to != trigger.address, "to address is required");
-					require(($reserve_asset == 'base' AND $reserve_amount == $network_fee) OR ($reserve_asset != 'base' AND $reserve_amount == 0), "should not send a reserve");
-
-					require(is_integer($amounts_in.yes) AND $amounts_in.yes >= 0, "invalid yes_amount");
-					require(is_integer($amounts_in.no) AND $amounts_in.no >= 0, "invalid no_amount");
-					require(is_integer($amounts_in.draw) AND $amounts_in.draw >= 0, "invalid draw_amount");
-					require($amounts_in.yes + $amounts_in.no + $amounts_in.draw > 0, "nothing to transfer");
-
-					require($amounts_in.yes <= $user_balance.yes, "not enough yes balance");
-					require($amounts_in.no <= $user_balance.no, "not enough no balance");
-					require($amounts_in.draw <= $user_balance.draw, "not enough draw balance");
-				}`,
-				messages: [
-					{
-						app: 'state',
-						state: `{
-							var['balance_' || trigger.address] = $sum_by_outcome($user_balance, {yes: -$amounts_in.yes, no: -$amounts_in.no, draw: -$amounts_in.draw});
-							var['balance_' || $to] = $sum_by_outcome($get_user_balance($to), $amounts_in);
-
-							response['event'] = json_stringify({
-								type: 'transfer',
-								user: trigger.address,
-								to: $to,
-								yes_amount: $amounts_in.yes,
-								no_amount: $amounts_in.no,
-								draw_amount: $amounts_in.draw,
-								user_balance: $get_user_balance(trigger.address),
-								to_balance: $get_user_balance($to)
-							});
-						}`
-					},
-				]
-			},
 			{ // mint or redeem tokens
 				if: `{!exists(trigger.data.claim_profit) AND !exists(trigger.data.add_liquidity) AND (($reserve_amount > $network_fee AND (trigger.data.yes_amount OR trigger.data.no_amount OR trigger.data.draw_amount OR trigger.data.type)) OR $has_sale)}`,
 				init: `{

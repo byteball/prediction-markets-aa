@@ -703,45 +703,6 @@ describe('Check tokenless prediction AA with draw (base)', function () {
 		this.check_reserve();
 	});
 
-	it('Alice transfers draw tokens to Bob', async () => {
-		const draw_amount = 1e6;
-
-		const { unit, error } = await this.alice.triggerAaWithData({
-			toAddress: this.prediction_address,
-			amount: 1e4,
-			data: {
-				transfer: 1,
-				to: this.bobAddress,
-				draw_amount
-			}
-		});
-
-		expect(error).to.be.null;
-		expect(unit).to.be.validUnit;
-
-		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
-
-		expect(response.bounced).to.be.false;
-		expect(response.response_unit).to.be.null;
-
-		this.alice_draw_amount -= draw_amount;
-		this.bob_draw_amount += draw_amount;
-
-		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
-
-		expect(vars.supplies.draw).to.be.equal(this.supply_draw);
-		expect(vars.reserve).to.be.equal(this.reserve);
-
-		expect(vars[`balance_${this.aliceAddress}`]).to.deep.equal({ yes: this.alice_yes_amount, no: this.alice_no_amount, draw: this.alice_draw_amount });
-		expect(vars[`balance_${this.bobAddress}`]).to.deep.equal({ yes: this.bob_yes_amount, no: this.bob_no_amount, draw: this.bob_draw_amount });
-
-		const event = JSON.parse(response.response.responseVars.event);
-		expect(event.type).to.be.equal('transfer');
-		expect(event.draw_amount).to.be.equal(draw_amount);
-		expect(event.user_balance.draw).to.be.equal(this.alice_draw_amount);
-		expect(event.to_balance.draw).to.be.equal(this.bob_draw_amount);
-	});
-
 	it('Bob add liquidity', async () => {
 		const amount = 3e9;
 

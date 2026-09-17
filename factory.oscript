@@ -2,7 +2,7 @@
 	doc_url: "https://prophet.ooo/prediction-factory.json",
 	init: `{
 		$prediction_base_aa = '22F6NK23KCPXHGURKFHLTQ5XXCTYEMC3';
-		$prediction_tokenless_base_aa = 'YHG7GSWPQ6V5T43WBYGFXN2VP6VSG2V2';
+		$prediction_tokenless_base_aa = 'R7XTLGBZ2MRNWU4FEWDDAV7BOWU2D7DV';
 	}`,
 	messages: {
 		cases: [

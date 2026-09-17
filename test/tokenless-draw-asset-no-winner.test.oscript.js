@@ -589,44 +589,6 @@ describe('Check tokenless prediction AA with draw (asset, no winner)', function 
 		expect(response.response.error.message).to.be.equal("no results yet");
 	});
 
-	it('Alice transfers no tokens to Bob while trading is closed', async () => {
-		const no_amount = 1e6;
-
-		const { unit, error } = await this.alice.triggerAaWithData({
-			toAddress: this.prediction_address,
-			amount: 1e4,
-			data: {
-				transfer: 1,
-				to: this.bobAddress,
-				no_amount
-			}
-		});
-
-		expect(error).to.be.null;
-		expect(unit).to.be.validUnit;
-
-		const { response } = await this.network.getAaResponseToUnitOnNode(this.alice, unit);
-
-		expect(response.bounced).to.be.false;
-		expect(response.response_unit).to.be.null;
-
-		this.alice_no_amount -= no_amount;
-		this.bob_no_amount += no_amount;
-
-		const { vars } = await this.alice.readAAStateVars(this.prediction_address);
-
-		expect(vars.supplies.no).to.be.equal(this.supply_no);
-		expect(vars.reserve).to.be.equal(this.reserve);
-		expect(vars[`balance_${this.aliceAddress}`]).to.deep.equal({ yes: this.alice_yes_amount, no: this.alice_no_amount, draw: this.alice_draw_amount });
-		expect(vars[`balance_${this.bobAddress}`]).to.deep.equal({ yes: this.bob_yes_amount, no: this.bob_no_amount, draw: this.bob_draw_amount });
-
-		const event = JSON.parse(response.response.responseVars.event);
-		expect(event.type).to.be.equal('transfer');
-		expect(event.no_amount).to.be.equal(no_amount);
-		expect(event.user_balance.no).to.be.equal(this.alice_no_amount);
-		expect(event.to_balance.no).to.be.equal(this.bob_no_amount);
-	});
-
 	it('Alice redeems her tokens', async () => {
 		const { error: errorTravel } = await this.network.timetravel({ shift: this.waiting_period_length * 1000 });
 		expect(errorTravel).to.be.null;
