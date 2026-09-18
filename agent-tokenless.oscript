@@ -81,6 +81,7 @@
 		$user_balance = $get_user_balance(trigger.address);
 
 		$sum_by_outcome = ($a, $b) => {yes: $a.yes + $b.yes, no: $a.no + $b.no, draw: $a.draw + $b.draw};
+		$is_non_negative = ($a) => $a.yes >= 0 AND $a.no >= 0 AND $a.draw >= 0;
 
 		$to = trigger.data.to OTHERWISE trigger.address;
 
@@ -229,6 +230,9 @@
 
 							require($res.new_reserve <= balance[$reserve_asset] - $payout, "new reserve state var is greater than the AA balance in the reserve asset"); // balance[] does not reflect the already sent payments, that's why we subtract $payout
 							require($res.new_reserve - $reserve <= $reserve_amount, "reserve grows by more than the added reserve amount");
+							require($is_non_negative($new_supplies), "negative supply");
+							require($is_non_negative($get_user_balance(trigger.address)), "negative balance of the sender");
+							require($is_non_negative($get_user_balance($to)), "negative balance of the recipient");
 						}`
 					},
 				]
@@ -429,6 +433,9 @@
 							var['supplies'] = $supplies;
 							var['reserve'] -= $payout;
 							var['balance_' || trigger.address] = $user_balance;
+
+							require($is_non_negative($supplies), "negative supply");
+							require($is_non_negative($user_balance), "negative balance");
 
 							response['event'] = json_stringify({
 								type: 'claim_profit',
