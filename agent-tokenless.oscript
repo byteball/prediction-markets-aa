@@ -59,13 +59,13 @@
 		$result = var['result']; // yes/no/draw
 
 		// amounts by outcome: positive = buy, negative = redeem
-		$amounts_in = {
+		$trigger_amounts = {
 			yes: trigger.data.yes_amount OTHERWISE 0,
 			no: trigger.data.no_amount OTHERWISE 0,
 			draw: trigger.data.draw_amount OTHERWISE 0
 		};
 
-		$has_sale = $amounts_in.yes < 0 OR $amounts_in.no < 0 OR $amounts_in.draw < 0;
+		$has_sale = $trigger_amounts.yes < 0 OR $trigger_amounts.no < 0 OR $trigger_amounts.draw < 0;
 
 		$end_of_waiting_period = $event_date + $waiting_period_length;
 		$trading_open = timestamp <= $event_date - $quiet_period OR timestamp >= $end_of_waiting_period;
@@ -137,7 +137,7 @@
 
 					} else {
 						// positive = buy, negative = sell from the sender's balance
-						$amounts = $amounts_in;
+						$amounts = $trigger_amounts;
 
 						require(is_integer($amounts.yes), "invalid yes_amount");
 						require(is_integer($amounts.no), "invalid no_amount");
